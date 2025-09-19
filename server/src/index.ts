@@ -144,6 +144,8 @@ function createServer() {
 
 const server = createServer();
 
+const wss = new WebSocketServer({ server, path: '/ws' });
+
 wss.on('connection', (socket: WebSocket) => {
   let clientId: string | null = null;
   socket.on('message', (raw: RawData) => {
