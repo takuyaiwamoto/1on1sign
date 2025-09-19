@@ -90,7 +90,8 @@ export async function exportSignaturePdf(strokes: Stroke[], options?: RenderOpti
   });
 
   const pdfBytes = await pdfDoc.save();
-  return new Blob([pdfBytes], { type: 'application/pdf' });
+  const pdfCopy = new Uint8Array(pdfBytes);
+  return new Blob([pdfCopy.buffer], { type: 'application/pdf' });
 }
 
 function drawStrokes(ctx: CanvasRenderingContext2D, strokes: Stroke[], width: number, height: number) {
