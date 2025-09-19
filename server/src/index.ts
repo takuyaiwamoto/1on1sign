@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import express from 'express';
 import cors from 'cors';
-import { WebSocketServer, WebSocket } from 'ws';
+import { WebSocketServer, WebSocket, RawData } from 'ws';
 import { nanoid } from 'nanoid';
 
 const PORT = Number(process.env.PORT ?? 4000);
@@ -144,11 +144,9 @@ function createServer() {
 
 const server = createServer();
 
-const wss = new WebSocketServer({ server, path: '/ws' });
-
-wss.on('connection', (socket) => {
+wss.on('connection', (socket: WebSocket) => {
   let clientId: string | null = null;
-  socket.on('message', (raw) => {
+  socket.on('message', (raw: RawData) => {
     try {
       const message = JSON.parse(raw.toString()) as ClientMessage;
       if (message.type === 'join') {
@@ -211,7 +209,7 @@ wss.on('connection', (socket) => {
     }
   });
 
-  socket.on('error', (error) => {
+  socket.on('error', (error: Error) => {
     console.error('WebSocket error', error);
     if (clientId) {
       removeClient(clientId);
