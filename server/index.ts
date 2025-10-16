@@ -16,6 +16,10 @@ async function main() {
 
   const app = express();
 
+  app.get('/healthz', (_, res) => {
+    res.status(200).json({ status: 'ok' });
+  });
+
   app.all('*', (req, res) => {
     return handle(req, res);
   });
