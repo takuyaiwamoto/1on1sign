@@ -163,6 +163,12 @@ function TalentPageContent() {
   });
 
   useEffect(() => {
+    if (localStream && canConnect) {
+      void negotiate();
+    }
+  }, [localStream, canConnect, negotiate]);
+
+  useEffect(() => {
     sendRef.current = send;
   }, [send]);
 
