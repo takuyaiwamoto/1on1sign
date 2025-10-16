@@ -33,45 +33,50 @@ function computeToken(roomId: string, role: Role): string {
   return createHmac('sha256', secret).update(`${roomId}:${role}`).digest('hex');
 }
 
-export function createOrReplaceRoom(roomId?: string): RoomRecord {
-  const id = roomId && roomId.trim().length > 0 ? roomId : randomUUID();
+function ensureRoom(roomId: string): RoomRecord & { createdAt: number } {
+  const registry = getRegistry();
+  const existing = registry.get(roomId);
+  if (existing) {
+    return existing;
+  }
+
   const tokens: Record<Role, string> = {
-    fan: computeToken(id, 'fan'),
-    talent: computeToken(id, 'talent'),
-    sign: computeToken(id, 'sign')
+    fan: computeToken(roomId, 'fan'),
+    talent: computeToken(roomId, 'talent'),
+    sign: computeToken(roomId, 'sign')
   };
 
-  const registry = getRegistry();
-  registry.set(id, {
-    roomId: id,
+  const record = {
+    roomId,
     tokens,
     createdAt: Date.now()
-  });
+  };
+  registry.set(roomId, record);
+  return record;
+}
 
-  return { roomId: id, tokens };
+export function createOrReplaceRoom(roomId?: string): RoomRecord {
+  const id = roomId && roomId.trim().length > 0 ? roomId : randomUUID();
+  const record = ensureRoom(id);
+  return { roomId: record.roomId, tokens: record.tokens };
 }
 
 export function getRoom(roomId: string): RoomRecord | undefined {
-  const registry = getRegistry();
-  const record = registry.get(roomId);
-  if (!record) {
-    return undefined;
-  }
+  const record = getRegistry().get(roomId);
+  if (!record) return undefined;
   return { roomId: record.roomId, tokens: record.tokens };
 }
 
 export function verifyToken(roomId: string, role: Role, token: string): boolean {
-  const registry = getRegistry();
-  if (!registry.has(roomId)) {
+  const expected = computeToken(roomId, role);
+  if (expected !== token) {
     return false;
   }
-  const expected = computeToken(roomId, role);
-  return expected === token;
+  ensureRoom(roomId);
+  return true;
 }
 
 export function getTokens(roomId: string): Record<Role, string> | null {
-  const registry = getRegistry();
-  const record = registry.get(roomId);
-  if (!record) return null;
+  const record = ensureRoom(roomId);
   return record.tokens;
 }
