@@ -9,6 +9,7 @@ interface PeerConnectionCallbacks {
 
 export function createPeerConnection(callbacks: PeerConnectionCallbacks = {}) {
   const pc = new RTCPeerConnection(WEBRTC_CONFIG);
+  let composedStream: MediaStream | null = null;
 
   pc.onicecandidate = (event) => {
     if (event.candidate && callbacks.onIceCandidate) {
@@ -26,13 +27,24 @@ export function createPeerConnection(callbacks: PeerConnectionCallbacks = {}) {
     if (callbacks.onTrack) {
       const [stream] = event.streams;
       if (stream) {
+        composedStream = stream;
         callbacks.onTrack(stream);
+        return;
       }
+
+      if (!composedStream) {
+        composedStream = new MediaStream();
+      }
+      composedStream.addTrack(event.track);
+      callbacks.onTrack(composedStream);
     }
   };
 
   pc.onconnectionstatechange = () => {
     callbacks.onConnectionStateChange?.(pc.connectionState);
+    if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+      composedStream = null;
+    }
   };
 
   return pc;
