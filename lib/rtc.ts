@@ -72,6 +72,9 @@ export async function acceptRemoteDescription(
   pc: RTCPeerConnection,
   description: SessionDescription
 ) {
+  if (description.type === 'offer' && pc.signalingState === 'have-local-offer') {
+    await pc.setLocalDescription({ type: 'rollback' });
+  }
   const current = pc.currentRemoteDescription;
   if (current && current.type === description.type && current.sdp === description.sdp) {
     return;
