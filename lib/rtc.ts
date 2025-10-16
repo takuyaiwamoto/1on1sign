@@ -72,8 +72,8 @@ export async function acceptRemoteDescription(
   pc: RTCPeerConnection,
   description: SessionDescription
 ) {
-  const current = pc.currentRemoteDescription?.type;
-  if (current === description.type) {
+  const current = pc.currentRemoteDescription;
+  if (current && current.type === description.type && current.sdp === description.sdp) {
     return;
   }
   await pc.setRemoteDescription(description);
