@@ -1,3 +1,4 @@
+import clsx from 'clsx';
 import { useEffect, useRef } from 'react';
 
 interface VideoPanelProps {
@@ -6,6 +7,7 @@ interface VideoPanelProps {
   layout?: 'stack' | 'overlay';
   mutedLocal?: boolean;
   showLocalPreview?: boolean;
+  className?: string;
 }
 
 export function VideoPanel({
@@ -13,7 +15,8 @@ export function VideoPanel({
   localStream = null,
   layout = 'overlay',
   mutedLocal = true,
-  showLocalPreview = true
+  showLocalPreview = true,
+  className
 }: VideoPanelProps) {
   const remoteRef = useRef<HTMLVideoElement | null>(null);
   const localRef = useRef<HTMLVideoElement | null>(null);
@@ -34,10 +37,13 @@ export function VideoPanel({
     }
   }, [localStream]);
 
-  const containerClass =
+  const containerClass = clsx(
     layout === 'stack'
-      ? 'flex flex-col gap-3 h-full'
-      : 'relative w-full h-full overflow-hidden rounded-2xl bg-black';
+      ? 'flex h-full flex-col gap-3'
+      : 'relative w-full h-full overflow-hidden bg-black',
+    layout === 'overlay' && 'rounded-2xl',
+    className
+  );
 
   return (
     <div className={containerClass}>

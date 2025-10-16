@@ -209,39 +209,38 @@ function FanPageContent() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-white">
-      <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-6 md:flex-row">
-        <div className="flex-1">
-          <div className="flex h-full flex-col gap-4">
-            <div className="relative flex-1 overflow-hidden rounded-3xl bg-gray-900">
-              <VideoPanel
-                remoteStream={remoteStream}
-                localStream={localStream}
-                mutedLocal
-                showLocalPreview
-              />
-              {!hasStarted && (
-                <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/40">
-                  <button
-                    type="button"
-                    onClick={initializeMedia}
-                    className="rounded-full bg-white px-6 py-3 text-base font-semibold text-gray-900 shadow-lg"
-                  >
-                    通話を開始
-                  </button>
-                </div>
-              )}
-            </div>
-            <div className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
-              <div>ステータス: {statusMessage}</div>
-              <div>接続状態: {connectionState}</div>
-              {error && <div className="text-red-600">エラー: {error}</div>}
-            </div>
+    <div className="relative flex min-h-screen w-full flex-col bg-black text-white">
+      <div className="flex-1">
+        <VideoPanel
+          remoteStream={remoteStream}
+          localStream={localStream}
+          mutedLocal
+          showLocalPreview
+          className="rounded-none"
+        />
+        {!hasStarted && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/50">
+            <button
+              type="button"
+              onClick={initializeMedia}
+              className="rounded-full bg-white px-6 py-3 text-base font-semibold text-gray-900 shadow-lg"
+            >
+              通話を開始
+            </button>
           </div>
+        )}
+      </div>
+
+      <div className="pointer-events-none absolute inset-0">
+        <div className="pointer-events-auto absolute top-4 left-4 max-w-xs rounded-xl bg-black/60 px-4 py-3 text-xs sm:text-sm">
+          <div>ステータス: {statusMessage}</div>
+          <div>接続状態: {connectionState}</div>
+          {error && <div className="text-red-400">エラー: {error}</div>}
         </div>
-        <aside className="flex w-full max-w-sm flex-col gap-4">
-          <h2 className="text-lg font-semibold text-gray-900">色紙エリア</h2>
+
+        <div className="pointer-events-auto absolute bottom-4 right-4 flex w-32 flex-col items-end gap-3 sm:w-48">
           <SignaturePreview
+            className="!bg-black border border-white/20 shadow-xl"
             onRendererReady={(renderer) => {
               rendererRef.current = renderer ?? null;
               setPreviewReady(Boolean(renderer));
@@ -250,13 +249,13 @@ function FanPageContent() {
           <button
             type="button"
             onClick={handleDownload}
-            className="rounded-full bg-black px-4 py-2 text-sm font-semibold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+            className="w-full rounded-full bg-white/90 px-4 py-2 text-xs font-semibold text-gray-900 shadow-lg transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
             disabled={!previewReady}
           >
-            PNGダウンロード
+            PNG保存
           </button>
-        </aside>
-      </main>
+        </div>
+      </div>
     </div>
   );
 }
