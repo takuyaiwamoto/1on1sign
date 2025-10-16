@@ -1,5 +1,5 @@
 import clsx from 'clsx';
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 interface VideoPanelProps {
   remoteStream: MediaStream | null;
@@ -20,6 +20,17 @@ export function VideoPanel({
 }: VideoPanelProps) {
   const remoteRef = useRef<HTMLVideoElement | null>(null);
   const localRef = useRef<HTMLVideoElement | null>(null);
+  const [remoteNeedsPlay, setRemoteNeedsPlay] = useState(false);
+
+  const attemptPlay = useCallback((video: HTMLVideoElement, onFail: () => void) => {
+    const playPromise = video.play();
+    if (playPromise && typeof playPromise.catch === 'function') {
+      playPromise.catch((error) => {
+        console.warn('[video] autoplay failed', error);
+        onFail();
+      });
+    }
+  }, []);
 
   useEffect(() => {
     if (remoteRef.current && remoteStream) {
@@ -28,9 +39,7 @@ export function VideoPanel({
       }
       const video = remoteRef.current;
       const play = () => {
-        video
-          .play()
-          .catch((error) => console.warn('[video] remote play failed', error));
+        attemptPlay(video, () => setRemoteNeedsPlay(true));
       };
       if (video.readyState >= 2) {
         play();
@@ -42,7 +51,7 @@ export function VideoPanel({
         return () => video.removeEventListener('loadeddata', handler);
       }
     }
-  }, [remoteStream]);
+  }, [remoteStream, attemptPlay]);
 
   useEffect(() => {
     if (localRef.current && localStream) {
@@ -51,9 +60,10 @@ export function VideoPanel({
       }
       const video = localRef.current;
       const play = () => {
-        video
-          .play()
-          .catch((error) => console.warn('[video] local play failed', error));
+        attemptPlay(video, () => {
+          // local preview can stay muted, so retry once silently
+          setTimeout(() => attemptPlay(video, () => undefined), 0);
+        });
       };
       if (video.readyState >= 2) {
         play();
@@ -63,7 +73,13 @@ export function VideoPanel({
         return () => video.removeEventListener('loadeddata', handler);
       }
     }
-  }, [localStream]);
+  }, [localStream, attemptPlay]);
+
+  useEffect(() => {
+    if (!remoteStream) {
+      setRemoteNeedsPlay(false);
+    }
+  }, [remoteStream]);
 
   const containerClass = clsx(
     layout === 'stack'
@@ -87,6 +103,26 @@ export function VideoPanel({
         controls={false}
         muted={false}
       />
+      {remoteNeedsPlay && (
+        <div className="pointer-events-auto absolute inset-0 z-20 flex items-center justify-center bg-black/60">
+          <button
+            type="button"
+            onClick={() => {
+              if (remoteRef.current) {
+                remoteRef.current
+                  .play()
+                  .then(() => setRemoteNeedsPlay(false))
+                  .catch((error) => {
+                    console.warn('[video] manual play failed', error);
+                  });
+              }
+            }}
+            className="rounded-full bg-white px-5 py-3 text-sm font-semibold text-gray-900 shadow-lg"
+          >
+            タップして視聴開始
+          </button>
+        </div>
+      )}
 
       {showLocalPreview && (
         <div
