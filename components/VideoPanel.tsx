@@ -37,6 +37,7 @@ export function VideoPanel({
       if (remoteRef.current.srcObject !== remoteStream) {
         remoteRef.current.srcObject = remoteStream;
       }
+      setRemoteNeedsPlay(true);
       const video = remoteRef.current;
       const play = () => {
         attemptPlay(video, () => setRemoteNeedsPlay(true));
@@ -50,6 +51,8 @@ export function VideoPanel({
         video.addEventListener('loadeddata', handler, { once: true });
         return () => video.removeEventListener('loadeddata', handler);
       }
+    } else {
+      setRemoteNeedsPlay(false);
     }
   }, [remoteStream, attemptPlay]);
 
@@ -74,12 +77,6 @@ export function VideoPanel({
       }
     }
   }, [localStream, attemptPlay]);
-
-  useEffect(() => {
-    if (!remoteStream) {
-      setRemoteNeedsPlay(false);
-    }
-  }, [remoteStream]);
 
   const containerClass = clsx(
     layout === 'stack'
