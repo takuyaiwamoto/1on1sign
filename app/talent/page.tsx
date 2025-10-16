@@ -47,7 +47,19 @@ function TalentPageContent() {
 
   const ensurePeerConnection = useCallback(() => {
     if (peerConnectionRef.current) {
-      return peerConnectionRef.current;
+      const pc = peerConnectionRef.current;
+      if (localStream) {
+        const existingTrackIds = new Set(
+          pc.getSenders().map((sender) => sender.track?.id).filter(Boolean) as string[]
+        );
+        localStream.getTracks().forEach((track) => {
+          if (!existingTrackIds.has(track.id)) {
+            log('add local track', track.kind, track.id);
+            pc.addTrack(track, localStream);
+          }
+        });
+      }
+      return pc;
     }
 
     const pc = createPeerConnection({
@@ -183,23 +195,6 @@ function TalentPageContent() {
   useEffect(() => {
     sendRef.current = send;
   }, [send]);
-
-  useEffect(() => {
-    return () => {
-      if (canConnect) {
-        log('leaving room');
-        sendRef.current({
-          kind: 'leave',
-          roomId,
-          role: ROLE
-        });
-      }
-      log('cleanup peer connection');
-      peerConnectionRef.current?.close();
-      peerConnectionRef.current = null;
-      localStream?.getTracks().forEach((track) => track.stop());
-    };
-  }, [localStream, canConnect, roomId, log]);
 
   const initializeMedia = useCallback(async () => {
     log('initialize media');
