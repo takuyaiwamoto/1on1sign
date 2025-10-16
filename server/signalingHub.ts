@@ -117,11 +117,7 @@ export function attachSignalingHub(server: HttpServer) {
 
         const existing = room.roles.get(role);
         if (existing && existing !== ws) {
-          sendMessage(existing, {
-            kind: 'error',
-            message: 'another_connection_detected'
-          });
-          existing.close();
+          existing.close(4000, 'replaced');
         }
 
         connection = { roomId, role, token };
