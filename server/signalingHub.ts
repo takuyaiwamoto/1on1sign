@@ -152,6 +152,9 @@ export function attachSignalingHub(server: HttpServer) {
           ws.close();
           break;
         case 'offer':
+          console.log(
+            `[ws] offer from=${connection.role} to=${message.target} room=${connection.roomId}`
+          );
           forwardToRole(room, message.target, {
             kind: 'offer',
             source: connection.role,
@@ -159,6 +162,9 @@ export function attachSignalingHub(server: HttpServer) {
           });
           break;
         case 'answer':
+          console.log(
+            `[ws] answer from=${connection.role} to=${message.target} room=${connection.roomId}`
+          );
           forwardToRole(room, message.target, {
             kind: 'answer',
             source: connection.role,
@@ -166,6 +172,9 @@ export function attachSignalingHub(server: HttpServer) {
           });
           break;
         case 'ice-candidate':
+          console.log(
+            `[ws] ice from=${connection.role} to=${message.target} room=${connection.roomId}`
+          );
           forwardToRole(room, message.target, {
             kind: 'ice-candidate',
             source: connection.role,
