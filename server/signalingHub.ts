@@ -64,9 +64,6 @@ function parseUrlInfo(requestUrl: string | undefined): Partial<ConnectionContext
 }
 
 function validateJoin(roomId: string, role: Role, token: string): boolean {
-  if (!getRoom(roomId)) {
-    return false;
-  }
   return verifyToken(roomId, role, token);
 }
 
