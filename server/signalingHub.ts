@@ -118,6 +118,7 @@ export function attachSignalingHub(server: HttpServer) {
         }
 
         connection = { roomId, role, token };
+        console.log(`[ws] ${role} joined room=${roomId} client=${request.socket.remoteAddress}`);
         room.connections.set(ws, connection);
         room.roles.set(role, ws);
 
