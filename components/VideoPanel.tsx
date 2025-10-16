@@ -26,6 +26,21 @@ export function VideoPanel({
       if (remoteRef.current.srcObject !== remoteStream) {
         remoteRef.current.srcObject = remoteStream;
       }
+      const video = remoteRef.current;
+      const play = () => {
+        video
+          .play()
+          .catch((error) => console.warn('[video] remote play failed', error));
+      };
+      if (video.readyState >= 2) {
+        play();
+      } else {
+        const handler = () => {
+          play();
+        };
+        video.addEventListener('loadeddata', handler, { once: true });
+        return () => video.removeEventListener('loadeddata', handler);
+      }
     }
   }, [remoteStream]);
 
@@ -33,6 +48,19 @@ export function VideoPanel({
     if (localRef.current && localStream) {
       if (localRef.current.srcObject !== localStream) {
         localRef.current.srcObject = localStream;
+      }
+      const video = localRef.current;
+      const play = () => {
+        video
+          .play()
+          .catch((error) => console.warn('[video] local play failed', error));
+      };
+      if (video.readyState >= 2) {
+        play();
+      } else {
+        const handler = () => play();
+        video.addEventListener('loadeddata', handler, { once: true });
+        return () => video.removeEventListener('loadeddata', handler);
       }
     }
   }, [localStream]);
