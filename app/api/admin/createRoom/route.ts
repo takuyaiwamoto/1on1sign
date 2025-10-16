@@ -1,4 +1,3 @@
-import { headers } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { createOrReplaceRoom } from '../../../../server/roomStore';
 
@@ -6,8 +5,11 @@ interface CreateRoomRequestBody {
   roomId?: string;
 }
 
-function getOriginHost(): string | null {
-  const hdrs = headers();
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
+function getOriginHost(request: Request): string | null {
+  const hdrs = request.headers;
   const origin = hdrs.get('origin');
   if (origin) return origin;
   const host = hdrs.get('x-forwarded-host') ?? hdrs.get('host');
@@ -35,7 +37,7 @@ export async function POST(request: Request) {
 
   const body = (await request.json().catch(() => ({}))) as CreateRoomRequestBody;
   const record = createOrReplaceRoom(body.roomId);
-  const originHost = getOriginHost();
+  const originHost = getOriginHost(request);
 
   if (!originHost) {
     return NextResponse.json(

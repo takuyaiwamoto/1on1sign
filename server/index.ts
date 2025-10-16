@@ -15,7 +15,6 @@ async function main() {
   await nextApp.prepare();
 
   const app = express();
-  app.use(express.json());
 
   app.all('*', (req, res) => {
     return handle(req, res);
