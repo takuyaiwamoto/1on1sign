@@ -27,6 +27,11 @@ function TalentPageContent() {
   const signToken = params.get('signToken') ?? '';
   const signUrlParam = params.get('signUrl');
 
+  const log = useCallback((...parts: unknown[]) => {
+    // eslint-disable-next-line no-console
+    console.info('[talent]', ...parts);
+  }, []);
+
   const [hasStarted, setHasStarted] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [isCameraOff, setIsCameraOff] = useState(false);
@@ -47,6 +52,7 @@ function TalentPageContent() {
 
     const pc = createPeerConnection({
       onIceCandidate: (candidate: IceCandidateInit) => {
+        log('local ice', candidate);
         sendRef.current({
           kind: 'ice-candidate',
           roomId,
@@ -55,17 +61,22 @@ function TalentPageContent() {
         });
       },
       onTrack: (stream) => {
+        log('remote track received', stream.id, stream.getTracks().map((t) => t.kind));
         setRemoteStream(stream);
       }
     });
+    log('peer connection created');
 
     if (localStream) {
-      localStream.getTracks().forEach((track) => pc.addTrack(track, localStream));
+      localStream.getTracks().forEach((track) => {
+        log('add local track', track.kind, track.id);
+        pc.addTrack(track, localStream);
+      });
     }
 
     peerConnectionRef.current = pc;
     return pc;
-  }, [localStream, roomId]);
+  }, [localStream, roomId, log]);
 
   useEffect(() => {
     const pc = peerConnectionRef.current;
@@ -75,16 +86,21 @@ function TalentPageContent() {
     const missing = localStream.getTracks().filter(
       (track) => !senders.some((sender) => sender.track?.id === track.id)
     );
-    missing.forEach((track) => pc.addTrack(track, localStream));
-  }, [localStream]);
+    missing.forEach((track) => {
+      log('sync track', track.kind, track.id);
+      pc.addTrack(track, localStream);
+    });
+  }, [localStream, log]);
 
   const negotiate = useCallback(async () => {
     if (negotiatingRef.current) return;
     negotiatingRef.current = true;
+    log('negotiate start');
 
     try {
       const pc = ensurePeerConnection();
       const offer = await createOffer(pc);
+      log('created offer', offer.type);
       sendRef.current({
         kind: 'offer',
         roomId,
@@ -98,7 +114,7 @@ function TalentPageContent() {
     } finally {
       negotiatingRef.current = false;
     }
-  }, [ensurePeerConnection, roomId]);
+  }, [ensurePeerConnection, roomId, log]);
 
   const handleMessage = useCallback(
     async (message: ServerToClientMessage) => {
@@ -120,6 +136,7 @@ function TalentPageContent() {
           try {
             const pc = ensurePeerConnection();
             await acceptRemoteDescription(pc, message.description);
+            log('applied answer');
             setStatusMessage('接続済み');
           } catch (answerError) {
             console.error('Failed to apply remote answer', answerError);
@@ -134,6 +151,7 @@ function TalentPageContent() {
           try {
             const pc = ensurePeerConnection();
             await addIceCandidate(pc, message.candidate);
+            log('added remote ice');
           } catch (candidateError) {
             console.error('Failed to add ICE candidate', candidateError);
           }
@@ -151,7 +169,7 @@ function TalentPageContent() {
           break;
       }
     },
-    [ensurePeerConnection, negotiate]
+    [ensurePeerConnection, negotiate, log]
   );
 
   const { send } = useSignaling({
@@ -169,24 +187,28 @@ function TalentPageContent() {
   useEffect(() => {
     return () => {
       if (canConnect) {
+        log('leaving room');
         sendRef.current({
           kind: 'leave',
           roomId,
           role: ROLE
         });
       }
+      log('cleanup peer connection');
       peerConnectionRef.current?.close();
       peerConnectionRef.current = null;
       localStream?.getTracks().forEach((track) => track.stop());
     };
-  }, [localStream, canConnect, roomId]);
+  }, [localStream, canConnect, roomId, log]);
 
   const initializeMedia = useCallback(async () => {
+    log('initialize media');
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: true,
         audio: true
       });
+      log('media ready', stream.getTracks().map((t) => `${t.kind}:${t.id}`));
       setLocalStream(stream);
       setHasStarted(true);
       setStatusMessage('接続準備中…');
@@ -194,7 +216,7 @@ function TalentPageContent() {
       console.error(mediaError);
       setError('カメラ・マイクの許可が必要です。ブラウザ設定を確認してください。');
     }
-  }, []);
+  }, [log]);
 
   const toggleMute = useCallback(() => {
     if (!localStream) return;

@@ -25,6 +25,11 @@ function FanPageContent() {
   const roomId = params.get('room') ?? '';
   const token = params.get('token') ?? '';
 
+  const log = useCallback((...parts: unknown[]) => {
+    // eslint-disable-next-line no-console
+    console.info('[fan]', ...parts);
+  }, []);
+
   const [hasStarted, setHasStarted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
@@ -45,6 +50,7 @@ function FanPageContent() {
 
     const pc = createPeerConnection({
       onIceCandidate: (candidate: IceCandidateInit) => {
+        log('ice candidate', candidate);
         sendRef.current({
           kind: 'ice-candidate',
           roomId,
@@ -53,22 +59,26 @@ function FanPageContent() {
         });
       },
       onTrack: (stream) => {
+        log('remote track received', stream.id, stream.getTracks().map((t) => t.kind));
         setRemoteStream(stream);
       },
       onConnectionStateChange: (state) => {
+        log('connection state', state);
         setConnectionState(state);
       }
     });
+    log('peer connection created');
 
     if (localStream) {
       localStream.getTracks().forEach((track) => {
+        log('addTrack', track.kind);
         pc.addTrack(track, localStream);
       });
     }
 
     peerConnectionRef.current = pc;
     return pc;
-  }, [localStream, roomId]);
+  }, [localStream, roomId, log]);
 
   useEffect(() => {
     const pc = peerConnectionRef.current;
@@ -79,10 +89,12 @@ function FanPageContent() {
       (track) => !senders.some((sender) => sender.track?.id === track.id)
     );
     missingTracks.forEach((track) => pc.addTrack(track, localStream));
-  }, [localStream]);
+    log('synced local tracks', localStream.getTracks().map((t) => t.id));
+  }, [localStream, log]);
 
   const handleMessage = useCallback(
     async (message: ServerToClientMessage) => {
+      log('message', message.kind, message);
       switch (message.kind) {
         case 'joined':
           setStatusMessage('タレント待機中…');
@@ -104,6 +116,7 @@ function FanPageContent() {
             const pc = ensurePeerConnection();
             await acceptRemoteDescription(pc, message.description);
             const answer = await createAnswer(pc);
+            log('created answer');
             sendRef.current({
               kind: 'answer',
               roomId,
@@ -148,7 +161,7 @@ function FanPageContent() {
           break;
       }
     },
-    [ensurePeerConnection, roomId]
+    [ensurePeerConnection, roomId, log]
   );
 
   const { send } = useSignaling({
@@ -163,11 +176,13 @@ function FanPageContent() {
   }, [send]);
 
   const initializeMedia = useCallback(async () => {
+    log('initializing media');
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: true,
         audio: true
       });
+      log('media acquired', stream.getTracks().map((t) => `${t.kind}:${t.id}`));
       setLocalStream(stream);
       setHasStarted(true);
       setStatusMessage('接続中…');
@@ -175,22 +190,24 @@ function FanPageContent() {
       console.error(mediaError);
       setError('カメラとマイクのアクセスが必要です。ブラウザ設定を確認してください。');
     }
-  }, []);
+  }, [log]);
 
   useEffect(() => {
     return () => {
       if (canConnect) {
+        log('leaving room');
         sendRef.current({
           kind: 'leave',
           roomId,
           role: ROLE
         });
       }
+      log('cleanup peer connection');
       peerConnectionRef.current?.close();
       peerConnectionRef.current = null;
       localStream?.getTracks().forEach((track) => track.stop());
     };
-  }, [localStream, canConnect, roomId]);
+  }, [localStream, canConnect, roomId, log]);
 
   const handleDownload = useCallback(() => {
     if (!rendererRef.current) return;

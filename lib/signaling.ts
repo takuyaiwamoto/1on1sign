@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type {
   ClientToServerMessage,
   Role,
@@ -54,6 +54,13 @@ export function useSignaling({
   const shouldReconnectRef = useRef(reconnect);
   const pendingQueueRef = useRef<ClientToServerMessage[]>([]);
 
+  const log = useCallback((...parts: unknown[]) => {
+    if (process.env.NODE_ENV !== 'production' || typeof window !== 'undefined') {
+      // eslint-disable-next-line no-console
+      console.info('[signaling]', role, ...parts);
+    }
+  }, [role]);
+
   useEffect(() => {
     shouldReconnectRef.current = reconnect;
   }, [reconnect]);
@@ -78,10 +85,12 @@ export function useSignaling({
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
       setState({ status: 'connecting' });
+      log('connecting', wsUrl);
 
       ws.onopen = () => {
         backoffIndexRef.current = 0;
         setState({ status: 'open' });
+        log('open');
         const joinMessage: ClientToServerMessage = {
           kind: 'join',
           roomId,
@@ -94,7 +103,7 @@ export function useSignaling({
             try {
               ws.send(JSON.stringify(message));
             } catch (error) {
-              console.warn('Failed to flush queued signaling message', error);
+              console.warn('[signaling] flush failed', error);
             }
           });
           pendingQueueRef.current = [];
@@ -104,17 +113,20 @@ export function useSignaling({
       ws.onmessage = (event) => {
         try {
           const parsed: ServerToClientMessage = JSON.parse(event.data);
+          log('recv', parsed.kind);
           onMessage(parsed);
         } catch (error) {
-          console.error('Failed to parse WebSocket message', error);
+          console.error('[signaling] parse failed', error);
         }
       };
 
-      ws.onerror = () => {
+      ws.onerror = (event) => {
+        log('error', event);
         setState({ status: 'error', error: 'WebSocket error' });
       };
 
       ws.onclose = () => {
+        log('closed');
         wsRef.current = null;
         setState({ status: 'closed' });
 
@@ -134,14 +146,15 @@ export function useSignaling({
       shouldReconnectRef.current = false;
       wsRef.current?.close();
     };
-  }, [roomId, token, role, onMessage, enabled]);
+  }, [roomId, token, role, onMessage, enabled, log]);
 
   const send = (message: ClientToServerMessage) => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-      console.warn('WebSocket not ready, queueing signaling message');
+      console.warn('[signaling] queue', message.kind);
       pendingQueueRef.current = [...pendingQueueRef.current, message];
       return;
     }
+    log('send', message.kind);
     wsRef.current.send(JSON.stringify(message));
   };
 
