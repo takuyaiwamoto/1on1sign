@@ -22,15 +22,20 @@ export function VideoPanel({
   const localRef = useRef<HTMLVideoElement | null>(null);
   const [remoteNeedsPlay, setRemoteNeedsPlay] = useState(false);
 
-  const attemptPlay = useCallback((video: HTMLVideoElement, onFail: () => void) => {
-    const playPromise = video.play();
-    if (playPromise && typeof playPromise.catch === 'function') {
-      playPromise.catch((error) => {
-        console.warn('[video] autoplay failed', error);
-        onFail();
-      });
-    }
-  }, []);
+  const attemptPlay = useCallback(
+    (video: HTMLVideoElement, onFail: (error: DOMException | undefined) => void) => {
+      const playPromise = video.play();
+      if (playPromise && typeof playPromise.catch === 'function') {
+        playPromise.catch((error) => {
+          console.warn('[video] autoplay failed', error);
+          onFail(error as DOMException | undefined);
+        });
+      } else {
+        onFail(undefined);
+      }
+    },
+    []
+  );
 
   useEffect(() => {
     if (remoteRef.current && remoteStream) {
@@ -39,17 +44,29 @@ export function VideoPanel({
       }
       setRemoteNeedsPlay(true);
       const video = remoteRef.current;
-      const play = () => {
-        attemptPlay(video, () => setRemoteNeedsPlay(true));
+      let cancelled = false;
+      const tryPlay = (retries = 5) => {
+        if (cancelled) return;
+        attemptPlay(video, (error) => {
+          if (error?.name === 'AbortError' && retries > 0) {
+            setTimeout(() => tryPlay(retries - 1), 120);
+          } else {
+            setRemoteNeedsPlay(true);
+          }
+        });
       };
       if (video.readyState >= 2) {
-        play();
+        tryPlay();
       } else {
         const handler = () => {
-          play();
+          video.removeEventListener('loadeddata', handler);
+          tryPlay();
         };
-        video.addEventListener('loadeddata', handler, { once: true });
-        return () => video.removeEventListener('loadeddata', handler);
+        video.addEventListener('loadeddata', handler);
+        return () => {
+          cancelled = true;
+          video.removeEventListener('loadeddata', handler);
+        };
       }
     } else {
       setRemoteNeedsPlay(false);
@@ -63,9 +80,10 @@ export function VideoPanel({
       }
       const video = localRef.current;
       const play = () => {
-        attemptPlay(video, () => {
-          // local preview can stay muted, so retry once silently
-          setTimeout(() => attemptPlay(video, () => undefined), 0);
+        attemptPlay(video, (error) => {
+          if (error?.name === 'AbortError') {
+            setTimeout(() => attemptPlay(video, () => undefined), 120);
+          }
         });
       };
       if (video.readyState >= 2) {
