@@ -52,6 +52,7 @@ export function useSignaling({
   const [state, setState] = useState<SignalingState>({ status: 'connecting' });
   const backoffIndexRef = useRef(0);
   const shouldReconnectRef = useRef(reconnect);
+  const pendingQueueRef = useRef<ClientToServerMessage[]>([]);
 
   useEffect(() => {
     shouldReconnectRef.current = reconnect;
@@ -88,6 +89,16 @@ export function useSignaling({
           token
         };
         ws.send(JSON.stringify(joinMessage));
+        if (pendingQueueRef.current.length > 0) {
+          pendingQueueRef.current.forEach((message) => {
+            try {
+              ws.send(JSON.stringify(message));
+            } catch (error) {
+              console.warn('Failed to flush queued signaling message', error);
+            }
+          });
+          pendingQueueRef.current = [];
+        }
       };
 
       ws.onmessage = (event) => {
@@ -127,7 +138,8 @@ export function useSignaling({
 
   const send = (message: ClientToServerMessage) => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-      console.warn('WebSocket not ready, unable to send message');
+      console.warn('WebSocket not ready, queueing signaling message');
+      pendingQueueRef.current = [...pendingQueueRef.current, message];
       return;
     }
     wsRef.current.send(JSON.stringify(message));
