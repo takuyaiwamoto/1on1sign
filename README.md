@@ -19,6 +19,9 @@
    cp .env.example .env
    ```
    `ROOM_SECRET`、`NEXT_PUBLIC_BASE_URL`、`NEXT_PUBLIC_WS_URL` を運用環境に合わせて設定してください。
+   モバイル回線など NAT が厳しいネットワークでの WebRTC を安定させるには TURN サーバーを用意し、
+   `NEXT_PUBLIC_TURN_URLS`（カンマ区切り URL）、`NEXT_PUBLIC_TURN_USERNAME`、`NEXT_PUBLIC_TURN_CREDENTIAL`
+   を併せて設定してください。
 
 3. 開発サーバーの起動
    ```bash
@@ -77,7 +80,8 @@
 ## Render デプロイ
 1. Render リポジトリを接続し、本リポジトリを選択
 2. Render サービス作成時に `render.yaml` を利用 (Infrastructure as Code)
-3. 必要な環境変数 (ROOM_SECRET, NEXT_PUBLIC_BASE_URL, NEXT_PUBLIC_WS_URL) を Render ダッシュボードに設定
+3. 必要な環境変数 (ROOM_SECRET, NEXT_PUBLIC_BASE_URL, NEXT_PUBLIC_WS_URL) を Render ダッシュボードに設定し、
+   モバイル対応が必要であれば TURN 資格情報 (NEXT_PUBLIC_TURN_URLS / USERNAME / CREDENTIAL) も設定
 4. デプロイ後、`/healthz` が 200 を返すことを確認
 
 ## 動作確認手順

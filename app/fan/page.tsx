@@ -360,7 +360,7 @@ export default function FanPage({ searchParams }: FanPageProps) {
             muted={false}
             className="absolute inset-0 h-full w-full rounded-none border-0 bg-black shadow-none"
           />
-          <div className="absolute bottom-2 right-4 w-[40%] max-w-[200px] translate-y-4 drop-shadow-xl">
+          <div className="absolute bottom-2 right-2 w-[120%] max-w-[480px] translate-y-8 drop-shadow-2xl">
             <div className="relative h-full w-full" style={{ aspectRatio: "9 / 16" }}>
               <canvas
                 ref={canvasRef}
