@@ -1,13 +1,14 @@
 const COLORS = [
   { key: "black", hex: "#111827", label: "黒" },
   { key: "red", hex: "#dc2626", label: "赤" },
-  { key: "green", hex: "#16a34a", label: "緑" }
+  { key: "green", hex: "#16a34a", label: "緑" },
+  { key: "white", hex: "#ffffff", label: "白" }
 ];
 
 const WIDTHS = [
-  { value: 12, label: "細" },
-  { value: 20, label: "中" },
-  { value: 32, label: "太" }
+  { value: 20, label: "細" },
+  { value: 32, label: "中" },
+  { value: 48, label: "太" }
 ];
 
 type SignToolbarProps = {

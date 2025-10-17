@@ -24,7 +24,7 @@ type BackgroundOption = {
 const CANVAS_WIDTH = 1440;
 const CANVAS_HEIGHT = 2560;
 const DEFAULT_COLOR = "#111827";
-const DEFAULT_WIDTH = 20;
+const DEFAULT_WIDTH = 32;
 
 const getBackgroundKey = (background: SignatureBackground) => `${background.kind}:${background.value}`;
 
