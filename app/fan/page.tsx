@@ -27,7 +27,7 @@ const MEDIA_CONSTRAINTS: MediaStreamConstraints = {
 const CANVAS_WIDTH = 1440;
 const CANVAS_HEIGHT = 2560;
 const DRAW_COLOR = "#111827";
-const DRAW_WIDTH = 10;
+const DRAW_WIDTH = 20;
 
 export default function FanPage({ searchParams }: FanPageProps) {
   const roomIdParam = searchParams?.roomId;

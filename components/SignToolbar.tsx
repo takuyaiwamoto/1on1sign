@@ -5,9 +5,9 @@ const COLORS = [
 ];
 
 const WIDTHS = [
-  { value: 6, label: "細" },
-  { value: 10, label: "中" },
-  { value: 16, label: "太" }
+  { value: 12, label: "細" },
+  { value: 20, label: "中" },
+  { value: 32, label: "太" }
 ];
 
 type SignToolbarProps = {
