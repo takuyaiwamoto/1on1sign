@@ -1,59 +1,53 @@
-import clsx from 'clsx';
-
-interface ControlsBarProps {
+type ControlsBarProps = {
+  isStreaming: boolean;
   isMuted: boolean;
-  isCameraOff: boolean;
+  isCameraOn: boolean;
   onToggleMute: () => void;
   onToggleCamera: () => void;
-  onEndCall: () => void;
+  onStartStream: () => void;
+  onHangUp: () => void;
   onOpenSign: () => void;
-}
+};
+
+const baseButton =
+  "rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60";
 
 export function ControlsBar({
+  isStreaming,
   isMuted,
-  isCameraOff,
+  isCameraOn,
   onToggleMute,
   onToggleCamera,
-  onEndCall,
+  onStartStream,
+  onHangUp,
   onOpenSign
 }: ControlsBarProps) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-white/90 px-4 py-3 shadow-lg ring-1 ring-gray-200 backdrop-blur">
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={onToggleMute}
-          className={clsx(
-            'rounded-full px-4 py-2 text-sm font-medium transition',
-            isMuted ? 'bg-red-500 text-white' : 'bg-gray-100 text-gray-800'
-          )}
-        >
-          {isMuted ? 'ミュート解除' : 'ミュート'}
-        </button>
-        <button
-          type="button"
-          onClick={onToggleCamera}
-          className={clsx(
-            'rounded-full px-4 py-2 text-sm font-medium transition',
-            isCameraOff ? 'bg-red-500 text-white' : 'bg-gray-100 text-gray-800'
-          )}
-        >
-          {isCameraOff ? 'カメラオン' : 'カメラオフ'}
-        </button>
-        <button
-          type="button"
-          onClick={onOpenSign}
-          className="rounded-full bg-black px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-800"
-        >
-          サインを書く
-        </button>
-      </div>
+    <div className="flex flex-wrap items-center gap-3 rounded-xl bg-white/70 p-4 shadow-inner">
       <button
         type="button"
-        onClick={onEndCall}
-        className="rounded-full bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-500"
+        className={`${baseButton} ${isStreaming ? "border-green-300 text-green-700" : ""}`}
+        onClick={onStartStream}
+        disabled={isStreaming}
       >
-        終了
+        配信を開始
+      </button>
+      <button type="button" className={baseButton} onClick={onToggleMute} disabled={!isStreaming}>
+        {isMuted ? "ミュート解除" : "ミュート"}
+      </button>
+      <button type="button" className={baseButton} onClick={onToggleCamera} disabled={!isStreaming}>
+        {isCameraOn ? "カメラ停止" : "カメラ開始"}
+      </button>
+      <button
+        type="button"
+        className={`${baseButton} border-red-300 text-red-600 hover:border-red-400 hover:bg-red-50`}
+        onClick={onHangUp}
+        disabled={!isStreaming}
+      >
+        配信を終了
+      </button>
+      <button type="button" className={baseButton} onClick={onOpenSign}>
+        サインを書く
       </button>
     </div>
   );

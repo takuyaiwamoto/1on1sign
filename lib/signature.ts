@@ -1,116 +1,150 @@
-import { CANVAS_HEIGHT, CANVAS_WIDTH, type SignatureStreamMessage, type StrokeCommand } from '../types/signature';
+import {
+  DEFAULT_SIGNATURE_BACKGROUND
+} from "@/types/signature";
+import type { SignatureBackground, SignatureStroke } from "@/types/signature";
 
-type Point = { x: number; y: number };
-
-function getStrokeKey(stroke: StrokeCommand): string {
-  return stroke.strokeId;
-}
+type StrokeState = {
+  color: string;
+  width: number;
+  active: boolean;
+};
 
 export class SignatureRenderer {
-  private ctx: CanvasRenderingContext2D;
-  private lastPoints = new Map<string, Point>();
+  private readonly ctx: CanvasRenderingContext2D;
+  private current: StrokeState | null = null;
+  private background: SignatureBackground = DEFAULT_SIGNATURE_BACKGROUND;
+  private backgroundImage: HTMLImageElement | null = null;
 
-  constructor(private canvas: HTMLCanvasElement) {
-    const ctx = canvas.getContext('2d');
+  constructor(private readonly canvas: HTMLCanvasElement) {
+    const ctx = canvas.getContext("2d");
     if (!ctx) {
-      throw new Error('CanvasRenderingContext2D unavailable');
+      throw new Error("CanvasRenderingContext2D を取得できませんでした");
     }
-
     this.ctx = ctx;
-    this.hydrateCanvas();
+    this.reset();
   }
 
-  hydrateCanvas(): void {
-    this.canvas.width = CANVAS_WIDTH;
-    this.canvas.height = CANVAS_HEIGHT;
-    this.canvas.style.width = '100%';
-    this.canvas.style.height = '100%';
-
-    this.ctx.scale(1, 1);
-    this.ctx.lineCap = 'round';
-    this.ctx.lineJoin = 'round';
+  reset() {
+    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    this.applyBackground();
+    this.current = null;
   }
 
-  handleEvent(event: SignatureStreamMessage): void {
-    if (event.kind === 'clear') {
-      this.clear();
-      return;
+  draw(stroke: SignatureStroke) {
+    const { type, x, y, color, width } = stroke;
+    this.configureStroke(color, width);
+    switch (type) {
+      case "begin": {
+        this.ctx.beginPath();
+        this.ctx.moveTo(x, y);
+        this.current = { color, width, active: true };
+        break;
+      }
+      case "draw": {
+        if (!this.current?.active) {
+          this.ctx.beginPath();
+          this.ctx.moveTo(x, y);
+        }
+        this.ctx.lineTo(x, y);
+        this.ctx.stroke();
+        this.current = { color, width, active: true };
+        break;
+      }
+      case "end": {
+        if (this.current?.active) {
+          this.ctx.lineTo(x, y);
+          this.ctx.stroke();
+          this.ctx.closePath();
+        }
+        this.current = null;
+        break;
+      }
+      default:
+        break;
     }
-
-    this.drawStroke(event);
   }
 
-  clear(): void {
-    this.ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-    this.lastPoints.clear();
+  renderAll(strokes: SignatureStroke[]) {
+    this.reset();
+    strokes.forEach((stroke) => this.draw(stroke));
+    this.current = null;
   }
 
-  private drawStroke(stroke: StrokeCommand): void {
-    const key = getStrokeKey(stroke);
-    const last = this.lastPoints.get(key);
+  drawImageBase64(imageBase64: string) {
+    const image = new Image();
+    image.onload = () => {
+      this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+      this.ctx.drawImage(image, 0, 0, this.canvas.width, this.canvas.height);
+    };
+    image.src = imageBase64;
+  }
 
-    this.ctx.strokeStyle = stroke.color;
-    this.ctx.lineWidth = stroke.width;
+  async setBackground(background: SignatureBackground | null) {
+    const target = background ?? DEFAULT_SIGNATURE_BACKGROUND;
+    this.background = target;
+    this.backgroundImage = null;
 
-    if (stroke.type === 'begin' || !last) {
-      this.ctx.beginPath();
-      this.ctx.moveTo(stroke.x, stroke.y);
-      this.lastPoints.set(key, { x: stroke.x, y: stroke.y });
-      return;
-    }
-
-    this.ctx.beginPath();
-    this.ctx.moveTo(last.x, last.y);
-    this.ctx.lineTo(stroke.x, stroke.y);
-    this.ctx.stroke();
-
-    if (stroke.type === 'end') {
-      this.lastPoints.delete(key);
+    if (target.kind === "image") {
+      await new Promise<void>((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => {
+          this.backgroundImage = image;
+          this.reset();
+          resolve();
+        };
+        image.onerror = (error) => {
+          console.error("背景画像の読み込みに失敗しました", error);
+          this.background = DEFAULT_SIGNATURE_BACKGROUND;
+          this.backgroundImage = null;
+          this.reset();
+          reject(error);
+        };
+        image.src = target.value;
+      }).catch(() => {});
     } else {
-      this.lastPoints.set(key, { x: stroke.x, y: stroke.y });
+      this.reset();
     }
   }
 
-  exportToDataUrl(): string {
-    return this.canvas.toDataURL('image/png');
+  exportPng() {
+    return this.canvas.toDataURL("image/png");
   }
 
-  async drawImage(dataUrl: string): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => {
-        this.ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-        this.ctx.drawImage(img, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-        this.lastPoints.clear();
-        resolve();
-      };
-      img.onerror = (error) => reject(error);
-      img.src = dataUrl;
-    });
+  private configureStroke(color: string, width: number) {
+    this.ctx.lineCap = "round";
+    this.ctx.lineJoin = "round";
+    this.ctx.strokeStyle = color;
+    this.ctx.lineWidth = width;
   }
 
-  unmount(): void {
-    this.lastPoints.clear();
+  private applyBackground() {
+    if (this.background.kind === "color") {
+      this.ctx.fillStyle = this.background.value;
+      this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    } else if (this.backgroundImage) {
+      this.ctx.fillStyle = "#ffffff";
+      this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+      this.drawImageContain(this.backgroundImage);
+    } else {
+      this.ctx.fillStyle = "#ffffff";
+      this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    }
+  }
+
+  private drawImageContain(image: HTMLImageElement) {
+    const canvasWidth = this.canvas.width;
+    const canvasHeight = this.canvas.height;
+    const widthRatio = canvasWidth / image.width;
+    const heightRatio = canvasHeight / image.height;
+    const ratio = Math.min(widthRatio, heightRatio);
+    const drawWidth = image.width * ratio;
+    const drawHeight = image.height * ratio;
+    const offsetX = (canvasWidth - drawWidth) / 2;
+    const offsetY = (canvasHeight - drawHeight) / 2;
+    this.ctx.drawImage(image, offsetX, offsetY, drawWidth, drawHeight);
   }
 }
 
-export function normalizePointerPosition(
-  event: PointerEvent,
-  canvas: HTMLCanvasElement
-): Point {
-  const rect = canvas.getBoundingClientRect();
-  const scaleX = CANVAS_WIDTH / rect.width;
-  const scaleY = CANVAS_HEIGHT / rect.height;
-
-  return {
-    x: (event.clientX - rect.left) * scaleX,
-    y: (event.clientY - rect.top) * scaleY
-  };
-}
-
-export function downloadDataUrlPng(dataUrl: string, filename: string): void {
-  const link = document.createElement('a');
-  link.href = dataUrl;
-  link.download = filename;
-  link.click();
+export function createSignatureRenderer(canvas: HTMLCanvasElement) {
+  return new SignatureRenderer(canvas);
 }

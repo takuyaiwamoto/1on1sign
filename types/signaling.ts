@@ -1,134 +1,121 @@
-import type { SignatureStreamMessage } from './signature';
+import type { SignatureBackground, SignatureStroke } from "./signature";
 
-export type Role = 'fan' | 'talent' | 'sign';
-export type SessionDescriptionType = 'offer' | 'answer' | 'pranswer' | 'rollback';
-
-export interface SessionDescription {
-  type: SessionDescriptionType;
-  sdp?: string;
-}
-
-export interface JoinMessage {
-  kind: 'join';
-  roomId: string;
-  token: string;
-  role: Role;
-}
-
-export interface LeaveMessage {
-  kind: 'leave';
-  roomId: string;
-  role: Role;
-}
-
-export interface OfferMessage {
-  kind: 'offer';
-  roomId: string;
-  description: SessionDescription;
-  target: Role;
-}
-
-export interface AnswerMessage {
-  kind: 'answer';
-  roomId: string;
-  description: SessionDescription;
-  target: Role;
-}
-
-export interface IceCandidateInit {
+export type IceCandidate = {
   candidate: string;
   sdpMid?: string | null;
   sdpMLineIndex?: number | null;
   usernameFragment?: string | null;
-}
+};
 
-export interface IceCandidateMessage {
-  kind: 'ice-candidate';
-  roomId: string;
-  candidate: IceCandidateInit;
-  target: Role;
-}
+export type Role = "fan" | "talent" | "sign";
 
-export interface SignatureEventMessage {
-  kind: 'signature-event';
-  roomId: string;
-  event: SignatureStreamMessage;
-}
-
-export interface FinalSignUploadMessage {
-  kind: 'final-sign';
-  roomId: string;
-  image: string;
-}
+export type PeerNotificationKind = "joined" | "left";
 
 export type ClientToServerMessage =
-  | JoinMessage
-  | LeaveMessage
-  | OfferMessage
-  | AnswerMessage
-  | IceCandidateMessage
-  | SignatureEventMessage
-  | FinalSignUploadMessage;
-
-export interface JoinedEvent {
-  kind: 'joined';
-  role: Role;
-  peers: Role[];
-}
-
-export interface PeerJoinedEvent {
-  kind: 'peer-joined';
-  role: Role;
-}
-
-export interface PeerLeftEvent {
-  kind: 'peer-left';
-  role: Role;
-}
-
-export interface OfferEvent {
-  kind: 'offer';
-  source: Role;
-  description: SessionDescription;
-}
-
-export interface AnswerEvent {
-  kind: 'answer';
-  source: Role;
-  description: SessionDescription;
-}
-
-export interface IceCandidateEvent {
-  kind: 'ice-candidate';
-  source: Role;
-  candidate: IceCandidateInit;
-}
-
-export interface SignatureEventBroadcast {
-  kind: 'signature-event';
-  source: Role;
-  event: SignatureStreamMessage;
-}
-
-export interface FinalSignBroadcast {
-  kind: 'final-sign';
-  source: Role;
-  image: string;
-}
-
-export interface ErrorEvent {
-  kind: 'error';
-  message: string;
-  code?: string;
-}
+  | {
+      type: "join";
+      roomId: string;
+      role: Role;
+      token: string;
+    }
+  | {
+      type: "leave";
+    }
+  | {
+      type: "offer";
+      sdp: string;
+    }
+  | {
+      type: "answer";
+      sdp: string;
+    }
+  | {
+      type: "ice";
+      candidate: IceCandidate;
+    }
+  | {
+      type: "canvas-event";
+      stroke: SignatureStroke;
+    }
+  | {
+      type: "canvas-commit";
+      imageBase64: string;
+      width: number;
+      height: number;
+    }
+  | {
+      type: "canvas-background";
+      background: SignatureBackground | null;
+    }
+  | {
+      type: "canvas-request-state";
+    }
+  | {
+      type: "pong";
+    };
 
 export type ServerToClientMessage =
-  | JoinedEvent
-  | PeerJoinedEvent
-  | PeerLeftEvent
-  | OfferEvent
-  | AnswerEvent
-  | IceCandidateEvent
-  | SignatureEventBroadcast
-  | FinalSignBroadcast
-  | ErrorEvent;
+  | {
+      type: "joined";
+      roomId: string;
+      role: Role;
+      peers: Role[];
+    }
+  | {
+      type: "peer-update";
+      role: Role;
+      event: PeerNotificationKind;
+    }
+  | {
+      type: "offer";
+      sdp: string;
+      from: Role;
+    }
+  | {
+      type: "answer";
+      sdp: string;
+      from: Role;
+    }
+  | {
+      type: "ice";
+      candidate: IceCandidate;
+      from: Role;
+    }
+  | {
+      type: "canvas-event";
+      stroke: SignatureStroke;
+      from: Role;
+    }
+  | {
+      type: "canvas-commit";
+      imageBase64: string;
+      width: number;
+      height: number;
+      from: Role;
+      createdAt: number;
+    }
+  | {
+      type: "canvas-background";
+      background: SignatureBackground | null;
+      from: Role;
+    }
+  | {
+      type: "canvas-state";
+      strokes: SignatureStroke[];
+      imageBase64?: string;
+      width: number;
+      height: number;
+      background?: SignatureBackground | null;
+    }
+  | {
+      type: "error";
+      message: string;
+    }
+  | {
+      type: "ping";
+    };
+
+export type RoomPeer = {
+  role: Role;
+  token: string;
+};

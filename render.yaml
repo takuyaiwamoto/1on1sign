@@ -2,15 +2,17 @@ services:
   - type: web
     name: online-sign-system
     env: node
-    plan: free
+    region: oregon
+    plan: starter
     buildCommand: npm install && npm run build
     startCommand: npm run start
-    healthCheckPath: /
-    autoDeploy: true
+    healthCheckPath: /healthz
     envVars:
+      - key: NODE_VERSION
+        value: 18
       - key: ROOM_SECRET
         sync: false
       - key: NEXT_PUBLIC_BASE_URL
         sync: false
       - key: NEXT_PUBLIC_WS_URL
-        value: ""
+        sync: false

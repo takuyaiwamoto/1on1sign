@@ -1,314 +1,394 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { VideoPanel } from '../../components/VideoPanel';
-import { ControlsBar } from '../../components/ControlsBar';
-import {
-  acceptRemoteDescription,
-  addIceCandidate,
-  createOffer,
-  createPeerConnection
-} from '../../lib/rtc';
-import { useSignaling } from '../../lib/signaling';
-import type {
-  ClientToServerMessage,
-  IceCandidateInit,
-  ServerToClientMessage
-} from '../../types/signaling';
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-const ROLE = 'talent';
+import { ControlsBar } from "@/components/ControlsBar";
+import { SignaturePreview } from "@/components/SignaturePreview";
+import { VideoPanel } from "@/components/VideoPanel";
+import { SignalingClient } from "@/lib/signaling";
+import { WebRtcClient } from "@/lib/webrtc";
+import type { SignatureBackground, SignatureStroke } from "@/types/signature";
+import { DEFAULT_SIGNATURE_BACKGROUND } from "@/types/signature";
+import type { IceCandidate, Role, ServerToClientMessage } from "@/types/signaling";
 
-function TalentPageContent() {
-  const params = useSearchParams();
-  const router = useRouter();
-  const roomId = params.get('room') ?? '';
-  const token = params.get('token') ?? '';
-  const signToken = params.get('signToken') ?? '';
-  const signUrlParam = params.get('signUrl');
+type TalentPageProps = {
+  searchParams?: { [key: string]: string | string[] | undefined };
+};
 
-  const log = useCallback((...parts: unknown[]) => {
-    // eslint-disable-next-line no-console
-    console.info('[talent]', ...parts);
-  }, []);
+type CanvasState = {
+  strokes: SignatureStroke[];
+  imageBase64?: string;
+  width: number;
+  height: number;
+  background: SignatureBackground;
+};
 
-  const [hasStarted, setHasStarted] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
-  const [isCameraOff, setIsCameraOff] = useState(false);
+const MEDIA_CONSTRAINTS: MediaStreamConstraints = {
+  audio: { echoCancellation: true, noiseSuppression: true },
+  video: {
+    width: { ideal: 1280 },
+    height: { ideal: 720 },
+    facingMode: "user"
+  }
+};
+
+export default function TalentPage({ searchParams }: TalentPageProps) {
+  const roomIdParam = searchParams?.roomId;
+  const tokenParam = searchParams?.token;
+  const signTokenParam = searchParams?.signToken;
+  const roomId = Array.isArray(roomIdParam) ? roomIdParam[0] : roomIdParam;
+  const token = Array.isArray(tokenParam) ? tokenParam[0] : tokenParam;
+  const signToken = Array.isArray(signTokenParam) ? signTokenParam[0] : signTokenParam;
+
+  const [signalingStatus, setSignalingStatus] = useState("未接続");
+  const [connectionState, setConnectionState] = useState<RTCPeerConnectionState>("new");
+  const [errors, setErrors] = useState<string[]>([]);
+  const [canvasState, setCanvasState] = useState<CanvasState>({
+    strokes: [],
+    width: 1440,
+    height: 2560,
+    background: DEFAULT_SIGNATURE_BACKGROUND
+  });
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
-  const [statusMessage, setStatusMessage] = useState<string>('準備中…');
-  const [error, setError] = useState<string | null>(null);
-  const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
-  const sendRef = useRef<(message: ClientToServerMessage) => void>(() => {});
-  const negotiatingRef = useRef(false);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const [isCameraOn, setIsCameraOn] = useState(true);
+  const [peers, setPeers] = useState<Role[]>([]);
 
-  const canConnect = hasStarted && Boolean(roomId) && Boolean(token);
+  const signalingRef = useRef<SignalingClient | null>(null);
+  const webRtcRef = useRef<WebRtcClient | null>(null);
+  const negotiationInProgress = useRef(false);
 
-  const ensurePeerConnection = useCallback(() => {
-    if (peerConnectionRef.current) {
-      const pc = peerConnectionRef.current;
-      if (localStream) {
-        const existingTrackIds = new Set(
-          pc.getSenders().map((sender) => sender.track?.id).filter(Boolean) as string[]
-        );
-        localStream.getTracks().forEach((track) => {
-          if (!existingTrackIds.has(track.id)) {
-            log('add local track', track.kind, track.id);
-            pc.addTrack(track, localStream);
-          }
-        });
-      }
-      return pc;
-    }
+  const openSignUrl = useMemo(() => {
+    if (!roomId || !signToken) return "";
+    return `/sign?roomId=${encodeURIComponent(roomId)}&token=${encodeURIComponent(signToken)}`;
+  }, [roomId, signToken]);
 
-    const pc = createPeerConnection({
-      onIceCandidate: (candidate: IceCandidateInit) => {
-        log('local ice', candidate);
-        sendRef.current({
-          kind: 'ice-candidate',
-          roomId,
-          target: 'fan',
-          candidate
-        });
-      },
-      onTrack: (stream) => {
-        log('remote track received', stream.id, stream.getTracks().map((t) => t.kind));
-        setRemoteStream(stream);
-      }
-    });
-    log('peer connection created');
-
-    if (localStream) {
-      localStream.getTracks().forEach((track) => {
-        log('add local track', track.kind, track.id);
-        pc.addTrack(track, localStream);
-      });
-    }
-
-    peerConnectionRef.current = pc;
-    return pc;
-  }, [localStream, roomId, log]);
-
-  useEffect(() => {
-    const pc = peerConnectionRef.current;
-    if (!pc || !localStream) return;
-
-    const senders = pc.getSenders();
-    const missing = localStream.getTracks().filter(
-      (track) => !senders.some((sender) => sender.track?.id === track.id)
-    );
-    missing.forEach((track) => {
-      log('sync track', track.kind, track.id);
-      pc.addTrack(track, localStream);
-    });
-  }, [localStream, log]);
-
-  const negotiate = useCallback(async () => {
-    if (negotiatingRef.current) return;
-    negotiatingRef.current = true;
-    log('negotiate start');
-
+  const createOffer = useCallback(async () => {
+    if (negotiationInProgress.current) return;
+    const webRtc = webRtcRef.current;
+    const signaling = signalingRef.current;
+    if (!webRtc || !signaling) return;
+    negotiationInProgress.current = true;
     try {
-      const pc = ensurePeerConnection();
-      const offer = await createOffer(pc);
-      log('created offer', offer.type);
-      sendRef.current({
-        kind: 'offer',
-        roomId,
-        target: 'fan',
-        description: offer
+      const offer = await webRtc.createOffer({
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: true
       });
-      setStatusMessage('視聴者と接続中…');
-    } catch (error_) {
-      console.error('Failed to start negotiation', error_);
-      setError('接続処理に失敗しました。再試行してください。');
+      if (offer.sdp) {
+        signaling.send({ type: "offer", sdp: offer.sdp });
+      }
+    } catch (error) {
+      console.error("Failed to create offer", error);
+      setErrors((prev) => [...prev, "Offer の生成に失敗しました。"]);
     } finally {
-      negotiatingRef.current = false;
+      negotiationInProgress.current = false;
     }
-  }, [ensurePeerConnection, roomId, log]);
+  }, []);
+
+  const handleRemoteOffer = useCallback(async (sdp: string) => {
+    const webRtc = webRtcRef.current;
+    const signaling = signalingRef.current;
+    if (!webRtc || !signaling) return;
+    try {
+      await webRtc.applyRemoteDescription({ type: "offer", sdp });
+      const answer = await webRtc.createAnswer();
+      if (answer.sdp) {
+        signaling.send({ type: "answer", sdp: answer.sdp });
+      }
+    } catch (error) {
+      console.error("Failed to answer offer", error);
+      setErrors((prev) => [...prev, "リモートOffer処理に失敗しました。"]);
+    }
+  }, []);
+
+  const handleRemoteAnswer = useCallback(async (sdp: string) => {
+    const webRtc = webRtcRef.current;
+    if (!webRtc) return;
+    try {
+      await webRtc.applyRemoteDescription({ type: "answer", sdp });
+    } catch (error) {
+      console.error("Failed to apply answer", error);
+      setErrors((prev) => [...prev, "Answer の適用に失敗しました。"]);
+    }
+  }, []);
 
   const handleMessage = useCallback(
     async (message: ServerToClientMessage) => {
-      switch (message.kind) {
-        case 'joined':
-          if (message.peers.includes('fan')) {
-            await negotiate();
-          } else {
-            setStatusMessage('ファンの参加を待っています…');
-          }
+      switch (message.type) {
+        case "joined":
+          setPeers(message.peers);
+          signalingRef.current?.send({ type: "canvas-request-state" });
           break;
-        case 'peer-joined':
-          if (message.role === 'fan') {
-            await negotiate();
-          }
+        case "peer-update":
+          setPeers((prev) => {
+            if (message.event === "joined") {
+              const next = new Set(prev);
+              next.add(message.role);
+              if (message.role === "fan" && isStreaming) {
+                // Attempt offer when fan joins.
+                createOffer().catch((error) => {
+                  console.error("offer failed", error);
+                });
+              }
+              return Array.from(next);
+            }
+            return prev.filter((role) => role !== message.role);
+          });
           break;
-        case 'answer':
-          if (message.source !== 'fan') break;
-          try {
-            const pc = ensurePeerConnection();
-            await acceptRemoteDescription(pc, message.description);
-            log('applied answer');
-            setStatusMessage('接続済み');
-          } catch (answerError) {
-            console.error('Failed to apply remote answer', answerError);
-            setError('接続に失敗しました。再読み込みしてください。');
-          }
+        case "offer":
+          await handleRemoteOffer(message.sdp);
           break;
-        case 'offer':
-          // Talent initiates offers; ignore offers from fan.
+        case "answer":
+          await handleRemoteAnswer(message.sdp);
           break;
-        case 'ice-candidate':
-          if (message.source !== 'fan') break;
-          try {
-            const pc = ensurePeerConnection();
-            await addIceCandidate(pc, message.candidate);
-            log('added remote ice');
-          } catch (candidateError) {
-            console.error('Failed to add ICE candidate', candidateError);
-          }
+        case "ice":
+          await webRtcRef.current?.addIceCandidate(message.candidate);
           break;
-        case 'peer-left':
-          if (message.role === 'fan') {
-            setStatusMessage('ファンが離脱しました。');
-            setRemoteStream(null);
-          }
+        case "canvas-event":
+          setCanvasState((prev) => ({
+            ...prev,
+            strokes: [...prev.strokes, message.stroke].slice(-5000),
+            imageBase64: undefined
+          }));
           break;
-        case 'error':
-          setError(message.message);
+        case "canvas-commit":
+          setCanvasState((prev) => ({
+            ...prev,
+            imageBase64: message.imageBase64,
+            strokes: [],
+            width: message.width,
+            height: message.height
+          }));
+          break;
+        case "canvas-background":
+          setCanvasState((prev) => ({
+            ...prev,
+            background: message.background ?? DEFAULT_SIGNATURE_BACKGROUND
+          }));
+          break;
+        case "canvas-state":
+          setCanvasState({
+            strokes: message.strokes,
+            imageBase64: message.imageBase64,
+            width: message.width,
+            height: message.height,
+            background: message.background ?? DEFAULT_SIGNATURE_BACKGROUND
+          });
+          break;
+        case "error":
+          setErrors((prev) => [...prev, message.message]);
           break;
         default:
           break;
       }
     },
-    [ensurePeerConnection, negotiate, log]
+    [createOffer, handleRemoteAnswer, handleRemoteOffer, isStreaming]
   );
 
-  const { send } = useSignaling({
-    roomId,
-    token,
-    role: ROLE,
-    onMessage: handleMessage,
-    enabled: canConnect
-  });
-
-  useEffect(() => {
-    sendRef.current = send;
-  }, [send]);
-
-  const initializeMedia = useCallback(async () => {
-    log('initialize media');
+  const startStreaming = useCallback(async () => {
+    if (isStreaming) return;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: true
-      });
-      log('media ready', stream.getTracks().map((t) => `${t.kind}:${t.id}`));
+      const stream = await navigator.mediaDevices.getUserMedia(MEDIA_CONSTRAINTS);
       setLocalStream(stream);
-      setHasStarted(true);
-      setStatusMessage('接続準備中…');
-    } catch (mediaError) {
-      console.error(mediaError);
-      setError('カメラ・マイクの許可が必要です。ブラウザ設定を確認してください。');
+      setIsStreaming(true);
+      setIsMuted(false);
+      setIsCameraOn(true);
+      await webRtcRef.current?.setLocalStream(stream);
+      await createOffer();
+    } catch (error) {
+      console.error("Failed to get media stream", error);
+      setErrors((prev) => [...prev, "カメラ・マイクの取得に失敗しました。ブラウザ設定を確認してください。"]);
     }
-  }, [log]);
+  }, [createOffer, isStreaming]);
 
   const toggleMute = useCallback(() => {
     if (!localStream) return;
-    const next = !isMuted;
-    localStream.getAudioTracks().forEach((track) => {
-      track.enabled = !next;
+    const audioTracks = localStream.getAudioTracks();
+    if (audioTracks.length === 0) return;
+    const nextMuted = !isMuted;
+    audioTracks.forEach((track) => {
+      track.enabled = !nextMuted;
     });
-    setIsMuted(next);
+    setIsMuted(nextMuted);
   }, [isMuted, localStream]);
 
   const toggleCamera = useCallback(() => {
     if (!localStream) return;
-    const next = !isCameraOff;
-    localStream.getVideoTracks().forEach((track) => {
-      track.enabled = !next;
+    const videoTracks = localStream.getVideoTracks();
+    if (videoTracks.length === 0) return;
+    const nextCameraOn = !isCameraOn;
+    videoTracks.forEach((track) => {
+      track.enabled = nextCameraOn;
     });
-    setIsCameraOff(next);
-  }, [isCameraOff, localStream]);
+    setIsCameraOn(nextCameraOn);
+  }, [isCameraOn, localStream]);
 
-  const endCall = useCallback(() => {
-    router.replace('/');
-  }, [router]);
-
-  const signUrl = useMemo(() => {
-    if (signUrlParam) {
-      return signUrlParam;
-    }
-    if (!signToken || typeof window === 'undefined') {
-      return null;
-    }
-    const url = new URL(window.location.href);
-    url.pathname = '/sign';
-    url.search = `?room=${encodeURIComponent(roomId)}&token=${encodeURIComponent(signToken)}`;
-    return url.toString();
-  }, [roomId, signToken, signUrlParam]);
+  const hangUp = useCallback(() => {
+    localStream?.getTracks().forEach((track) => track.stop());
+    setLocalStream(null);
+    setRemoteStream(null);
+    setIsStreaming(false);
+    setIsMuted(false);
+    setIsCameraOn(false);
+    webRtcRef.current?.close();
+  }, [localStream]);
 
   const openSignPage = useCallback(() => {
-    if (!signUrl) {
-      setError('サイン用URLが設定されていません。管理者に確認してください。');
+    if (!openSignUrl) {
+      setErrors((prev) => [...prev, "サイン画面のURLを生成できませんでした。"]);
       return;
     }
-    window.open(signUrl, '_blank', 'noopener,noreferrer');
-  }, [signUrl]);
+    window.open(openSignUrl, "_blank", "noopener");
+  }, [openSignUrl]);
 
+  useEffect(() => {
+    if (!roomId || !token) {
+      setErrors((prev) => [...prev, "roomId と token が必要です。"]);
+      return;
+    }
+
+    const signaling = new SignalingClient({
+      roomId,
+      role: "talent",
+      token,
+      autoReconnect: true
+    });
+    signalingRef.current = signaling;
+    signaling.connect();
+
+    const unsubscribeStatus = signaling.on("status", (status) => {
+      switch (status) {
+        case "connected":
+          setSignalingStatus("接続済み");
+          break;
+        case "reconnecting":
+          setSignalingStatus("再接続中");
+          break;
+        case "connecting":
+          setSignalingStatus("接続中");
+          break;
+        case "closed":
+          setSignalingStatus("切断");
+          break;
+        default:
+          setSignalingStatus("待機中");
+          break;
+      }
+    });
+
+    const unsubscribeMessage = signaling.on("message", (message) => handleMessage(message));
+    const unsubscribeError = signaling.on("error", (error) => {
+      setErrors((prev) => [...prev, error.message]);
+    });
+
+    return () => {
+      unsubscribeStatus();
+      unsubscribeMessage();
+      unsubscribeError();
+      signaling.close();
+      signalingRef.current = null;
+    };
+  }, [handleMessage, roomId, token]);
+
+  useEffect(() => {
+    const client = new WebRtcClient({
+      role: "talent",
+      onIceCandidate: (candidate: IceCandidate) => {
+        signalingRef.current?.send({ type: "ice", candidate });
+      },
+      onNegotiationNeeded: async () => {
+        await createOffer();
+      },
+      onRemoteStream: (stream) => {
+        setRemoteStream(stream);
+      },
+      onConnectionStateChange: (state) => {
+        setConnectionState(state);
+        if (state === "failed" || state === "disconnected") {
+          setErrors((prev) => [...prev, "WebRTC 接続が切断されました。"]);
+        }
+      }
+    });
+    webRtcRef.current = client;
+    return () => {
+      client.close();
+      webRtcRef.current = null;
+    };
+  }, [createOffer]);
   if (!roomId || !token) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-white px-4">
-        <h1 className="text-2xl font-semibold">アクセスエラー</h1>
-        <p className="text-gray-600">正しいURLでアクセスしてください。</p>
-      </div>
+      <main className="flex min-h-screen flex-col items-center justify-center bg-white px-6">
+        <div className="max-w-md rounded-xl border border-red-200 bg-red-50 p-6 text-center text-red-600">
+          roomId と token をクエリパラメータに指定してください。
+        </div>
+      </main>
     );
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-white">
-      <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 py-6">
-        <div className="flex-1 overflow-hidden rounded-3xl bg-gray-900">
-          <VideoPanel remoteStream={remoteStream} localStream={localStream} />
-          {!hasStarted && (
-            <div className="flex h-full items-center justify-center bg-black/40">
-              <button
-                type="button"
-                onClick={initializeMedia}
-                className="rounded-full bg-white px-6 py-3 text-base font-semibold text-gray-900 shadow-lg"
-              >
-                配信を開始
-              </button>
-            </div>
-          )}
-        </div>
-        <ControlsBar
-          isMuted={isMuted}
-          isCameraOff={isCameraOff}
-          onToggleMute={toggleMute}
-          onToggleCamera={toggleCamera}
-          onEndCall={endCall}
-          onOpenSign={openSignPage}
-        />
-        <div className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
-          <div>ステータス: {statusMessage}</div>
-          {error && <div className="text-red-600">エラー: {error}</div>}
-        </div>
-      </main>
-    </div>
+    <main className="flex min-h-screen flex-col gap-8 bg-white pb-16">
+      <header className="border-b border-slate-100 bg-white/80 px-6 py-4 backdrop-blur">
+        <h1 className="text-2xl font-semibold text-slate-800">タレント画面</h1>
+        <p className="text-sm text-slate-500">ルームID: {roomId}</p>
+      </header>
+      <div className="flex flex-col gap-6 px-6">
+        <section className="relative grid gap-6 lg:grid-cols-[2fr_1fr]">
+          <div className="relative">
+            <VideoPanel stream={remoteStream} muted label="ファン映像" />
+            {localStream && (
+              <div className="absolute bottom-4 right-4 w-40 rounded-lg border border-white/40 shadow-lg">
+                <VideoPanel stream={localStream} muted mirror label="自分プレビュー" />
+              </div>
+            )}
+          </div>
+          <div className="flex flex-col gap-4">
+            <SignaturePreview
+              strokes={canvasState.strokes}
+              imageBase64={canvasState.imageBase64}
+              width={canvasState.width}
+              height={canvasState.height}
+              title="サインプレビュー"
+              background={canvasState.background}
+            />
+            <ControlsBar
+              isStreaming={isStreaming}
+              isMuted={isMuted}
+              isCameraOn={isCameraOn}
+              onToggleMute={toggleMute}
+              onToggleCamera={toggleCamera}
+              onStartStream={startStreaming}
+              onHangUp={hangUp}
+              onOpenSign={openSignPage}
+            />
+          </div>
+        </section>
+        <section className="grid gap-4 rounded-xl border border-slate-200 bg-white/70 p-4 shadow-sm lg:grid-cols-3">
+          <StatusItem label="シグナリング" value={signalingStatus} />
+          <StatusItem label="PeerConnection" value={connectionState} />
+          <StatusItem label="参加中" value={peers.join(", ") || "参加者なし"} />
+        </section>
+        {errors.length > 0 && (
+          <section className="space-y-2 rounded-xl border border-red-200 bg-red-50/80 p-4 text-sm text-red-700">
+            <div className="font-semibold">エラー</div>
+            <ul className="space-y-1">
+              {errors.map((error, index) => (
+                <li key={`${error}-${index}`}>・{error}</li>
+              ))}
+            </ul>
+          </section>
+        )}
+      </div>
+    </main>
   );
 }
 
-export default function TalentPage() {
+function StatusItem({ label, value }: { label: string; value: string }) {
   return (
-    <Suspense
-      fallback={
-        <div className="flex min-h-screen items-center justify-center bg-white text-gray-600">
-          読み込み中…
-        </div>
-      }
-    >
-      <TalentPageContent />
-    </Suspense>
+    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm">
+      <div className="text-xs text-slate-500">{label}</div>
+      <div className="font-medium text-slate-700">{value}</div>
+    </div>
   );
 }

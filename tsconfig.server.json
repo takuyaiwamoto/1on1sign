@@ -1,13 +1,16 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "outDir": "dist/server",
-    "module": "commonjs",
+    "outDir": "./dist",
     "noEmit": false,
-    "allowSyntheticDefaultImports": true,
+    "module": "CommonJS",
+    "target": "ES2021",
+    "moduleResolution": "Node10",
+    "lib": ["es2021"],
     "types": ["node"],
-    "emitDecoratorMetadata": false,
-    "declaration": false
+    "allowJs": false,
+    "isolatedModules": false
   },
-  "include": ["server/**/*.ts", "config/**/*.ts", "types/**/*.ts"]
+  "include": ["server/**/*.ts", "types/**/*.ts"],
+  "exclude": ["node_modules", ".next", "app"]
 }

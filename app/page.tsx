@@ -1,15 +1,32 @@
 "use client";
 
+import Link from "next/link";
+import type { Route } from "next";
+
+const links: Array<{ href: Route; label: string }> = [
+  { href: "/fan", label: "ファン画面へ" },
+  { href: "/talent", label: "タレント画面へ" },
+  { href: "/sign", label: "サイン作成画面へ" }
+];
+
 export default function HomePage() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-6 bg-white px-4">
-      <h1 className="text-3xl font-bold text-gray-900">Online Sign System</h1>
-      <p className="max-w-xl text-center text-gray-600">
-        管理 API で発行された fan / talent / sign の URL からご利用ください。ここではセットアップの確認に利用できます。
+    <main className="mx-auto flex min-h-screen w-full max-w-3xl flex-col items-center justify-center gap-6 px-6 text-center">
+      <h1 className="text-3xl font-bold">Online Sign System</h1>
+      <p className="text-base text-slate-600">
+        ファンとタレントがリアルタイムでつながり、サインを共有するオンライン体験アプリです。
       </p>
-      <p className="text-sm text-gray-500">
-        詳細な利用方法はリポジトリ内の README.md を参照してください。
-      </p>
+      <div className="flex flex-wrap items-center justify-center gap-4">
+        {links.map((link) => (
+          <Link
+            key={link.href}
+            href={link.href}
+            className="rounded-lg border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
+          >
+            {link.label}
+          </Link>
+        ))}
+      </div>
     </main>
   );
 }

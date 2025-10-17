@@ -1,25 +1,31 @@
-export const CANVAS_WIDTH = 1440;
-export const CANVAS_HEIGHT = 2560;
+export type StrokeEventType = "begin" | "draw" | "end";
 
-export type StrokeCommandType = 'begin' | 'draw' | 'end';
-
-export interface StrokeCommand {
-  kind: 'stroke';
-  strokeId: string;
-  type: StrokeCommandType;
+export type SignatureStroke = {
+  type: StrokeEventType;
   x: number;
   y: number;
   color: string;
   width: number;
-}
+};
 
-export interface ClearCommand {
-  kind: 'clear';
-}
+export type SignatureCommit = {
+  imageBase64: string;
+  width: number;
+  height: number;
+  createdAt: number;
+};
 
-export type SignatureStreamMessage = StrokeCommand | ClearCommand;
+export type SignatureBackground =
+  | {
+      kind: "color";
+      value: string;
+    }
+  | {
+      kind: "image";
+      value: string;
+    };
 
-export interface FinalSignatureMessage {
-  kind: 'final-sign';
-  image: string; // base64 data URL
-}
+export const DEFAULT_SIGNATURE_BACKGROUND: SignatureBackground = {
+  kind: "color",
+  value: "#ffffff"
+};

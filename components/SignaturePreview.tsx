@@ -1,17 +1,25 @@
-import clsx from 'clsx';
-import { useEffect, useRef } from 'react';
-import { SignatureRenderer } from '../lib/signature';
+import { useEffect, useRef } from "react";
 
-interface SignaturePreviewProps {
-  className?: string;
-  finalImage?: string | null;
-  onRendererReady?: (renderer: SignatureRenderer | null, canvas: HTMLCanvasElement | null) => void;
-}
+import { SignatureRenderer } from "@/lib/signature";
+import type { SignatureBackground, SignatureStroke } from "@/types/signature";
+import { DEFAULT_SIGNATURE_BACKGROUND } from "@/types/signature";
+
+type SignaturePreviewProps = {
+  strokes: SignatureStroke[];
+  imageBase64?: string;
+  width?: number;
+  height?: number;
+  title?: string;
+  background?: SignatureBackground | null;
+};
 
 export function SignaturePreview({
-  className,
-  finalImage,
-  onRendererReady
+  strokes,
+  imageBase64,
+  width = 1440,
+  height = 2560,
+  title,
+  background
 }: SignaturePreviewProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rendererRef = useRef<SignatureRenderer | null>(null);
@@ -19,37 +27,47 @@ export function SignaturePreview({
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-
-    const renderer = new SignatureRenderer(canvas);
-    rendererRef.current = renderer;
-    onRendererReady?.(renderer, canvas);
-
+    canvas.width = width;
+    canvas.height = height;
+    rendererRef.current = new SignatureRenderer(canvas);
     return () => {
-      rendererRef.current?.unmount();
       rendererRef.current = null;
-      onRendererReady?.(null, canvas);
     };
-  }, [onRendererReady]);
+  }, [width, height]);
 
   useEffect(() => {
     const renderer = rendererRef.current;
-    if (!renderer || !finalImage) {
-      return;
-    }
+    if (!renderer) return;
+    let cancelled = false;
+    const apply = async () => {
+      await renderer.setBackground(background ?? DEFAULT_SIGNATURE_BACKGROUND);
+      if (cancelled) return;
+      if (imageBase64) {
+        renderer.drawImageBase64(imageBase64);
+      } else {
+        renderer.renderAll(strokes);
+      }
+    };
+    void apply();
+    return () => {
+      cancelled = true;
+    };
+  }, [strokes, imageBase64, background]);
 
-    renderer.drawImage(finalImage).catch((error) => {
-      console.error('Failed to draw final signature image', error);
-    });
-  }, [finalImage]);
+  const showTitle = Boolean(title);
 
   return (
-    <div
-      className={clsx(
-        'relative aspect-[9/16] w-full max-w-xs overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm',
-        className
-      )}
-    >
-      <canvas ref={canvasRef} className="h-full w-full touch-none" />
+    <div className={`flex w-full flex-col ${showTitle ? "gap-2" : "gap-0"}`}>
+      {showTitle ? <div className="text-sm font-medium text-slate-600">{title}</div> : null}
+      <div className="relative w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-inner">
+        <div className="relative mx-auto h-full max-h-[400px] w-full max-w-[225px]">
+          <canvas
+            ref={canvasRef}
+            className="h-full w-full object-contain"
+            style={{ aspectRatio: `${width} / ${height}` }}
+          />
+        </div>
+      </div>
     </div>
   );
 }

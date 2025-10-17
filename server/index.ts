@@ -1,38 +1,68 @@
-import http from 'http';
-import express from 'express';
-import next from 'next';
-import dotenv from 'dotenv';
-import { attachSignalingHub } from './signalingHub';
+import "dotenv/config";
 
-dotenv.config();
+import http from "node:http";
 
-const dev = process.env.NODE_ENV !== 'production';
-const nextApp = next({ dev, dir: process.cwd() });
-const handle = nextApp.getRequestHandler();
-const PORT = Number(process.env.PORT) || 3000;
+import express from "express";
+import next from "next";
+
+import { SignalingHub } from "./signalingHub";
+
+const PORT = Number.parseInt(process.env.PORT ?? "3000", 10);
+const dev = process.env.NODE_ENV !== "production";
 
 async function main() {
+  if (!process.env.ROOM_SECRET) {
+    // Surface the configuration requirement early.
+    throw new Error("ROOM_SECRET が設定されていません。env を確認してください。");
+  }
+
+  const nextApp = next({ dev, dir: "." });
+  const handle = nextApp.getRequestHandler();
+  const upgrade = nextApp.getUpgradeHandler();
   await nextApp.prepare();
 
   const app = express();
-
-  app.get('/healthz', (_, res) => {
-    res.status(200).json({ status: 'ok' });
-  });
-
-  app.all('*', (req, res) => {
-    return handle(req, res);
-  });
-
   const server = http.createServer(app);
-  attachSignalingHub(server);
+
+  const signalingHub = new SignalingHub();
+  signalingHub.initialize();
+
+  app.disable("x-powered-by");
+
+  app.get("/healthz", (_req, res) => {
+    res.json({
+      status: "ok",
+      uptime: process.uptime(),
+      environment: process.env.NODE_ENV ?? "development"
+    });
+  });
+
+  app.all("*", (req, res) => handle(req, res));
+
+  server.on("upgrade", (request, socket, head) => {
+    if (request.url?.startsWith("/ws")) {
+      signalingHub.upgrade(request, socket, head);
+    } else {
+      upgrade(request, socket, head);
+    }
+  });
 
   server.listen(PORT, () => {
-    console.log(`Server ready on http://localhost:${PORT}`);
+    console.log(`[online-sign] server started on http://localhost:${PORT} (dev=${dev})`);
   });
+
+  const shutdown = () => {
+    signalingHub.dispose();
+    server.close(() => {
+      process.exit(0);
+    });
+  };
+
+  process.on("SIGINT", shutdown);
+  process.on("SIGTERM", shutdown);
 }
 
 main().catch((error) => {
-  console.error('Failed to start server', error);
+  console.error("Server failed to start:", error);
   process.exit(1);
 });

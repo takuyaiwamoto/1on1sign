@@ -1,162 +1,79 @@
-import clsx from 'clsx';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from "react";
 
-interface VideoPanelProps {
-  remoteStream: MediaStream | null;
-  localStream?: MediaStream | null;
-  layout?: 'stack' | 'overlay';
-  mutedLocal?: boolean;
-  showLocalPreview?: boolean;
+import { cn } from "@/lib/utils";
+
+type VideoPanelProps = {
+  stream: MediaStream | null;
+  muted?: boolean;
+  mirror?: boolean;
+  label?: string;
   className?: string;
-}
+};
 
-export function VideoPanel({
-  remoteStream,
-  localStream = null,
-  layout = 'overlay',
-  mutedLocal = true,
-  showLocalPreview = true,
-  className
-}: VideoPanelProps) {
-  const remoteRef = useRef<HTMLVideoElement | null>(null);
-  const localRef = useRef<HTMLVideoElement | null>(null);
-  const [remoteNeedsPlay, setRemoteNeedsPlay] = useState(false);
-
-  const attemptPlay = useCallback(
-    (video: HTMLVideoElement, onFail: (error: DOMException | undefined) => void) => {
-      const playPromise = video.play();
-      if (playPromise && typeof playPromise.catch === 'function') {
-        playPromise.catch((error) => {
-          console.warn('[video] autoplay failed', error);
-          onFail(error as DOMException | undefined);
-        });
-      } else {
-        onFail(undefined);
-      }
-    },
-    []
-  );
+export function VideoPanel({ stream, muted = false, mirror = false, label, className }: VideoPanelProps) {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const [needsPlay, setNeedsPlay] = useState(false);
 
   useEffect(() => {
-    if (remoteRef.current && remoteStream) {
-      if (remoteRef.current.srcObject !== remoteStream) {
-        remoteRef.current.srcObject = remoteStream;
+    const video = videoRef.current;
+    if (!video) return;
+    if (stream) {
+      if (video.srcObject !== stream) {
+        video.srcObject = stream;
       }
-      setRemoteNeedsPlay(true);
-      const video = remoteRef.current;
-      let cancelled = false;
-      const tryPlay = (retries = 5) => {
-        if (cancelled) return;
-        attemptPlay(video, (error) => {
-          if (error?.name === 'AbortError' && retries > 0) {
-            setTimeout(() => tryPlay(retries - 1), 120);
-          } else {
-            setRemoteNeedsPlay(true);
-          }
-        });
+      const play = async () => {
+        try {
+          await video.play();
+          setNeedsPlay(false);
+        } catch (error) {
+          setNeedsPlay(true);
+        }
       };
-      if (video.readyState >= 2) {
-        tryPlay();
-      } else {
-        const handler = () => {
-          video.removeEventListener('loadeddata', handler);
-          tryPlay();
-        };
-        video.addEventListener('loadeddata', handler);
-        return () => {
-          cancelled = true;
-          video.removeEventListener('loadeddata', handler);
-        };
-      }
+      play();
     } else {
-      setRemoteNeedsPlay(false);
+      video.pause();
+      video.srcObject = null;
+      video.removeAttribute("src");
+      video.load();
+      setNeedsPlay(false);
     }
-  }, [remoteStream, attemptPlay]);
+  }, [stream]);
 
-  useEffect(() => {
-    if (localRef.current && localStream) {
-      if (localRef.current.srcObject !== localStream) {
-        localRef.current.srcObject = localStream;
-      }
-      const video = localRef.current;
-      const play = () => {
-        attemptPlay(video, (error) => {
-          if (error?.name === 'AbortError') {
-            setTimeout(() => attemptPlay(video, () => undefined), 120);
-          }
-        });
-      };
-      if (video.readyState >= 2) {
-        play();
-      } else {
-        const handler = () => play();
-        video.addEventListener('loadeddata', handler, { once: true });
-        return () => video.removeEventListener('loadeddata', handler);
-      }
+  const handleManualPlay = async () => {
+    const video = videoRef.current;
+    if (!video) return;
+    try {
+      await video.play();
+      setNeedsPlay(false);
+    } catch (error) {
+      console.error("video play failed", error);
     }
-  }, [localStream, attemptPlay]);
-
-  const containerClass = clsx(
-    layout === 'stack'
-      ? 'flex h-full flex-col gap-3'
-      : 'relative w-full h-full overflow-hidden bg-black',
-    layout === 'overlay' && 'rounded-2xl',
-    className
-  );
+  };
 
   return (
-    <div className={containerClass}>
+    <div className={cn("relative overflow-hidden rounded-xl bg-black shadow-md", className)}>
       <video
-        ref={remoteRef}
-        className={
-          layout === 'stack'
-            ? 'w-full rounded-2xl bg-black aspect-video object-cover'
-            : 'absolute inset-0 h-full w-full object-cover'
-        }
-        autoPlay
+        ref={videoRef}
+        muted={muted}
         playsInline
+        autoPlay
         controls={false}
-        muted={false}
+        className={`h-full w-full object-cover ${mirror ? "scale-x-[-1]" : ""}`}
       />
-      {remoteNeedsPlay && (
-        <div className="pointer-events-auto absolute inset-0 z-20 flex items-center justify-center bg-black/60">
-          <button
-            type="button"
-            onClick={() => {
-              if (remoteRef.current) {
-                remoteRef.current
-                  .play()
-                  .then(() => setRemoteNeedsPlay(false))
-                  .catch((error) => {
-                    console.warn('[video] manual play failed', error);
-                  });
-              }
-            }}
-            className="rounded-full bg-white px-5 py-3 text-sm font-semibold text-gray-900 shadow-lg"
-          >
-            タップして視聴開始
-          </button>
-        </div>
-      )}
-
-      {showLocalPreview && (
-        <div
-          className={
-            layout === 'stack'
-              ? 'w-full rounded-2xl bg-black aspect-video object-cover'
-              : 'absolute bottom-4 right-4 h-28 w-20 overflow-hidden rounded-xl border border-white/40 shadow-lg'
-          }
+      {needsPlay && (
+        <button
+          type="button"
+          onClick={handleManualPlay}
+          className="absolute inset-0 flex items-center justify-center bg-black/60 text-white"
         >
-          <video
-            ref={localRef}
-            className="h-full w-full object-cover"
-            autoPlay
-            muted={mutedLocal}
-            playsInline
-            controls={false}
-          />
-        </div>
+          視聴を開始
+        </button>
       )}
+      {label ? (
+        <div className="absolute left-2 top-2 rounded bg-black/60 px-2 py-1 text-xs text-white">
+          {label}
+        </div>
+      ) : null}
     </div>
   );
 }

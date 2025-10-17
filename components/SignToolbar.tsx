@@ -1,26 +1,24 @@
-import clsx from 'clsx';
-
 const COLORS = [
-  { label: '黒', value: '#000000' },
-  { label: '赤', value: '#FF0000' },
-  { label: '緑', value: '#008000' }
+  { key: "black", hex: "#111827", label: "黒" },
+  { key: "red", hex: "#dc2626", label: "赤" },
+  { key: "green", hex: "#16a34a", label: "緑" }
 ];
 
 const WIDTHS = [
-  { label: '細', value: 3 },
-  { label: '普通', value: 6 },
-  { label: '太い', value: 10 }
+  { value: 3, label: "細" },
+  { value: 6, label: "中" },
+  { value: 10, label: "太" }
 ];
 
-interface SignToolbarProps {
+type SignToolbarProps = {
   color: string;
   width: number;
   onColorChange: (color: string) => void;
   onWidthChange: (width: number) => void;
   onClear: () => void;
-  onSubmitFinal: () => void;
-  isSubmitting?: boolean;
-}
+  onSubmit: () => void;
+  disabled?: boolean;
+};
 
 export function SignToolbar({
   color,
@@ -28,62 +26,65 @@ export function SignToolbar({
   onColorChange,
   onWidthChange,
   onClear,
-  onSubmitFinal,
-  isSubmitting = false
+  onSubmit,
+  disabled = false
 }: SignToolbarProps) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-white/95 px-4 py-3 shadow-lg ring-1 ring-gray-200 backdrop-blur">
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="flex items-center gap-2">
+    <div className="flex flex-wrap items-center gap-4 rounded-xl bg-white/90 p-4 shadow">
+      <div className="flex items-center gap-2">
+        <span className="text-sm text-slate-500">色</span>
+        <div className="flex gap-2">
           {COLORS.map((option) => (
             <button
-              key={option.value}
+              key={option.key}
               type="button"
-              onClick={() => onColorChange(option.value)}
-              className={clsx(
-                'flex h-9 w-14 items-center justify-center rounded-full text-sm font-medium transition',
-                color === option.value
-                  ? 'bg-gray-900 text-white'
-                  : 'bg-gray-100 text-gray-800'
-              )}
+              className={`h-9 w-9 rounded-full border-2 ${
+                color === option.hex ? "border-slate-800" : "border-transparent"
+              }`}
+              style={{ backgroundColor: option.hex }}
+              onClick={() => onColorChange(option.hex)}
             >
-              {option.label}
+              <span className="sr-only">{option.label}</span>
             </button>
           ))}
         </div>
-        <div className="flex items-center gap-2">
+      </div>
+      <div className="flex items-center gap-2">
+        <span className="text-sm text-slate-500">太さ</span>
+        <div className="flex gap-2">
           {WIDTHS.map((option) => (
             <button
               key={option.value}
               type="button"
-              onClick={() => onWidthChange(option.value)}
-              className={clsx(
-                'flex h-9 w-14 items-center justify-center rounded-full text-sm font-medium transition',
+              className={`rounded-full border px-3 py-1 text-sm ${
                 width === option.value
-                  ? 'bg-gray-900 text-white'
-                  : 'bg-gray-100 text-gray-800'
-              )}
+                  ? "border-slate-800 bg-slate-800 text-white"
+                  : "border-slate-200 bg-white text-slate-600"
+              }`}
+              onClick={() => onWidthChange(option.value)}
             >
               {option.label}
             </button>
           ))}
         </div>
+      </div>
+      <div className="flex items-center gap-2">
         <button
           type="button"
           onClick={onClear}
-          className="rounded-full bg-gray-200 px-4 py-2 text-sm font-medium text-gray-800 transition hover:bg-gray-300"
+          className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
         >
           クリア
         </button>
+        <button
+          type="button"
+          onClick={onSubmit}
+          disabled={disabled}
+          className="rounded-lg border border-indigo-300 bg-indigo-500 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-indigo-600 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          確定版送信
+        </button>
       </div>
-      <button
-        type="button"
-        disabled={isSubmitting}
-        onClick={onSubmitFinal}
-        className="rounded-full bg-black px-4 py-2 text-sm font-semibold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        {isSubmitting ? '送信中...' : '確定版送信'}
-      </button>
     </div>
   );
 }
