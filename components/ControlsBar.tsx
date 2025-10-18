@@ -7,9 +7,6 @@ type ControlsBarProps = {
   onStartStream: () => void;
   onHangUp: () => void;
   onOpenSign: () => void;
-  onNextFan: () => void;
-  waitingCount: number;
-  hasActiveFan: boolean;
 };
 
 const baseButton =
@@ -23,21 +20,10 @@ export function ControlsBar({
   onToggleCamera,
   onStartStream,
   onHangUp,
-  onOpenSign,
-  onNextFan,
-  waitingCount,
-  hasActiveFan
+  onOpenSign
 }: ControlsBarProps) {
   return (
     <div className="flex flex-wrap items-center gap-3 rounded-xl bg-white/70 p-4 shadow-inner">
-      <button
-        type="button"
-        className="rounded-lg border border-indigo-300 bg-indigo-500 px-4 py-2 text-sm font-semibold text-white shadow transition hover:bg-indigo-600 disabled:cursor-not-allowed disabled:opacity-60"
-        onClick={onNextFan}
-        disabled={!hasActiveFan && waitingCount === 0}
-      >
-        次へ{waitingCount > 0 ? ` (${waitingCount})` : hasActiveFan ? "" : ""}
-      </button>
       <button
         type="button"
         className={`${baseButton} ${isStreaming ? "border-green-300 text-green-700" : ""}`}

@@ -55,8 +55,6 @@ export default function TalentPage({ searchParams }: TalentPageProps) {
   const [isMuted, setIsMuted] = useState(false);
   const [isCameraOn, setIsCameraOn] = useState(true);
   const [peers, setPeers] = useState<Role[]>([]);
-  const [waitingCount, setWaitingCount] = useState(0);
-  const [hasActiveFan, setHasActiveFan] = useState(false);
 
   const signalingRef = useRef<SignalingClient | null>(null);
   const webRtcRef = useRef<WebRtcClient | null>(null);
@@ -179,10 +177,6 @@ export default function TalentPage({ searchParams }: TalentPageProps) {
             background: message.background ?? DEFAULT_SIGNATURE_BACKGROUND
           });
           break;
-        case "queue-info":
-          setWaitingCount(message.waitingCount);
-          setHasActiveFan(message.hasActiveFan);
-          break;
         case "error":
           setErrors((prev) => [...prev, message.message]);
           break;
@@ -208,10 +202,6 @@ export default function TalentPage({ searchParams }: TalentPageProps) {
       setErrors((prev) => [...prev, "カメラ・マイクの取得に失敗しました。ブラウザ設定を確認してください。"]);
     }
   }, [createOffer, isStreaming]);
-
-  const handleQueueNext = useCallback(() => {
-    signalingRef.current?.send({ type: "queue-next" });
-  }, []);
 
   const toggleMute = useCallback(() => {
     if (!localStream) return;
@@ -344,7 +334,6 @@ export default function TalentPage({ searchParams }: TalentPageProps) {
         <p className="text-sm text-slate-500">ルームID: {roomId}</p>
       </header>
       <div className="flex flex-col gap-6 px-6">
-        <div className="text-sm text-slate-600">待機中: {waitingCount} 人</div>
         <section className="relative grid gap-6 lg:grid-cols-[2fr_1fr]">
           <div className="relative">
             <VideoPanel stream={remoteStream} muted label="ファン映像" />
@@ -372,9 +361,6 @@ export default function TalentPage({ searchParams }: TalentPageProps) {
               onStartStream={startStreaming}
               onHangUp={hangUp}
               onOpenSign={openSignPage}
-              onNextFan={handleQueueNext}
-              waitingCount={waitingCount}
-              hasActiveFan={hasActiveFan}
             />
           </div>
         </section>

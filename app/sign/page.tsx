@@ -39,7 +39,6 @@ export default function SignPage({ searchParams }: SignPageProps) {
   const [isDrawing, setIsDrawing] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [background, setBackground] = useState<SignatureBackground>(DEFAULT_SIGNATURE_BACKGROUND);
-  const [latestCommit, setLatestCommit] = useState<string | undefined>(undefined);
   const [backgroundOptions, setBackgroundOptions] = useState<BackgroundOption[]>([
     {
       id: getBackgroundKey(DEFAULT_SIGNATURE_BACKGROUND),
@@ -56,7 +55,6 @@ export default function SignPage({ searchParams }: SignPageProps) {
   const pointerIdRef = useRef<number | null>(null);
   const strokesRef = useRef<SignatureStroke[]>([]);
   const backgroundRef = useRef<SignatureBackground>(DEFAULT_SIGNATURE_BACKGROUND);
-  const latestCommitRef = useRef<string | undefined>(undefined);
 
   const toolbarDisabled = useMemo(() => !isConnected, [isConnected]);
 
@@ -181,20 +179,11 @@ export default function SignPage({ searchParams }: SignPageProps) {
           strokesRef.current = [...strokesRef.current, message.stroke].slice(-5000);
           break;
         case "canvas-commit":
-          setLatestCommit(message.imageBase64);
-          latestCommitRef.current = message.imageBase64;
           rendererRef.current?.drawImageBase64(message.imageBase64);
           strokesRef.current = [];
           break;
         case "canvas-background":
           await applyBackground(message.background ?? DEFAULT_SIGNATURE_BACKGROUND, { addOption: true });
-          break;
-        case "canvas-reset":
-          await applyBackground(DEFAULT_SIGNATURE_BACKGROUND, { addOption: false });
-          rendererRef.current?.reset();
-          strokesRef.current = [];
-          setLatestCommit(undefined);
-          latestCommitRef.current = undefined;
           break;
         case "canvas-state":
           await applyBackground(message.background ?? DEFAULT_SIGNATURE_BACKGROUND, { addOption: true });
