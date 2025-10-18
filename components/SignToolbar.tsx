@@ -35,19 +35,25 @@ export function SignToolbar({
       <div className="flex items-center gap-2">
         <span className="text-sm text-slate-500">色</span>
         <div className="flex gap-2">
-          {COLORS.map((option) => (
-            <button
-              key={option.key}
-              type="button"
-              className={`h-9 w-9 rounded-full border-2 ${
-                color === option.hex ? "border-slate-800" : "border-transparent"
-              }`}
-              style={{ backgroundColor: option.hex }}
-              onClick={() => onColorChange(option.hex)}
-            >
-              <span className="sr-only">{option.label}</span>
-            </button>
-          ))}
+          {COLORS.map((option) => {
+            const isSelected = color === option.hex;
+            const borderClass = isSelected
+              ? "border-slate-800"
+              : option.hex === "#ffffff"
+                ? "border-slate-300"
+                : "border-transparent";
+            return (
+              <button
+                key={option.key}
+                type="button"
+                className={`h-9 w-9 rounded-full border-2 ${borderClass}`}
+                style={{ backgroundColor: option.hex }}
+                onClick={() => onColorChange(option.hex)}
+              >
+                <span className="sr-only">{option.label}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
       <div className="flex items-center gap-2">

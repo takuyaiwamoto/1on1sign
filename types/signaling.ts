@@ -1,5 +1,7 @@
 import type { SignatureBackground, SignatureStroke } from "./signature";
 
+export type FanStatus = "waiting" | "active" | "completed";
+
 export type IceCandidate = {
   candidate: string;
   sdpMid?: string | null;
@@ -51,6 +53,9 @@ export type ClientToServerMessage =
       type: "canvas-request-state";
     }
   | {
+      type: "queue-next";
+    }
+  | {
       type: "pong";
     };
 
@@ -98,6 +103,21 @@ export type ServerToClientMessage =
       type: "canvas-background";
       background: SignatureBackground | null;
       from: Role;
+    }
+  | {
+      type: "fan-status";
+      status: FanStatus;
+      ahead: number;
+      queueLength: number;
+    }
+  | {
+      type: "queue-info";
+      waitingCount: number;
+      hasActiveFan: boolean;
+    }
+  | {
+      type: "canvas-reset";
+      background: SignatureBackground;
     }
   | {
       type: "canvas-state";
